@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-03-09
+- Added R to the Docker image from CRAN's official Ubuntu `noble-cran40` repository and installed `r-base` plus `r-base-dev`.
+
 ## 2026-03-03
 - Fixed `cxclose` target resolution so it can close worktrees by directory name/path even when the tracked branch name differs.
 - Updated `cxclose` to delete the resolved tracked branch (when present) instead of assuming the user argument is the branch name.
