@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   python3 make g++ \
   ripgrep jq \
   xvfb xauth \
+  ffmpeg \
   && rm -rf /var/lib/apt/lists/*
 RUN ln -s /usr/bin/python3 /usr/local/bin/python
 
