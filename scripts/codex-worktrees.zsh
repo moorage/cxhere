@@ -155,6 +155,15 @@ cxhere() {
     printf "%s\n" "$match_ids"
   }
 
+  docker_local_image_id() {
+    docker image inspect -f '{{.Id}}' codex-cli:local 2>/dev/null || true
+  }
+
+  docker_container_image_id() {
+    local container_id="$1"
+    docker inspect -f '{{.Image}}' "$container_id" 2>/dev/null || true
+  }
+
   if [[ "$playwright_browsers_path" == /workspace/* ]]; then
     playwright_browsers_rel="${playwright_browsers_path#/workspace/}"
     if [ -n "$playwright_browsers_rel" ]; then
@@ -205,14 +214,26 @@ cxhere() {
 
       if [ -n "$matching_ids" ]; then
         local match_count
+        local running_container_id
+        local running_image_id
+        local local_image_id
         match_count="$(printf "%s\n" "$matching_ids" | wc -l | tr -d ' ')"
         if [ "$match_count" -gt 1 ]; then
           echo "multiple containers running for worktree: $worktree_dir" >&2
           echo "example container: $(printf "%s\n" "$matching_ids" | head -n1)" >&2
           return 1
         fi
-        echo "container already running for worktree: $worktree_dir ($matching_ids)" >&2
-        return 0
+        running_container_id="$(printf "%s\n" "$matching_ids" | head -n1)"
+        running_image_id="$(docker_container_image_id "$running_container_id")"
+        local_image_id="$(docker_local_image_id)"
+
+        if [ -n "$running_image_id" ] && [ -n "$local_image_id" ] && [ "$running_image_id" != "$local_image_id" ]; then
+          echo "replacing stale container for worktree: $worktree_dir ($running_container_id)" >&2
+          docker stop "$running_container_id" >/dev/null
+        else
+          echo "container already running for worktree: $worktree_dir ($running_container_id)" >&2
+          return 0
+        fi
       fi
     fi
   else
@@ -384,9 +405,17 @@ cxhere() {
 	      -e CODEX_HOME=/home/codex/.codex \
 	      -e NPM_CONFIG_CACHE=/home/codex/.npm \
 	      -e TMPDIR=/tmp \
+	      -e HOME=/tmp/pulse-home \
 	      -e XDG_RUNTIME_DIR=/tmp/xdg-runtime \
+	      -e XDG_CONFIG_HOME=/tmp/pulse-home/.config \
+	      -e XDG_CACHE_HOME=/tmp/pulse-home/.cache \
 	      -e DISPLAY="${DISPLAY:-:99}" \
 	      -e XVFB_SCREEN="${XVFB_SCREEN:-1920x1080x24}" \
+	      -e PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
+	      -e PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
+	      -e PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+	      -e HARNESS_CAPTURE_WITH_FFMPEG="${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
+	      -e HARNESS_CAPTURE_AUDIO_FORMAT="${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
 	      -w /workspace \
 	      codex-cli:local \
 	      "${codex_args[@]}" \

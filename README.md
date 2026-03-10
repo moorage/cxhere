@@ -101,7 +101,8 @@ Example paths:
 - If the branch already exists and no worktree exists for it, `cxhere` will reuse the branch and create a worktree.
 - If the target worktree directory exists on disk but is not registered with git, `cxhere` will stop and print guidance.
 - If a worktree already exists, `cxhere` checks for running containers with a bind mount to that worktree (Docker mode only):
-  - Exactly one container: print a message and exit 0.
+  - Exactly one container on the current `codex-cli:local` image: print a message and exit 0.
+  - Exactly one container on an older `codex-cli:local` image: stop it and launch a fresh container from the rebuilt image.
   - More than one: print a message and exit non-zero.
   - None: launch Docker with the existing worktree.
 - If `CXHERE_NO_DOCKER=1`, container checks are skipped and `codex` is run directly on the worktree.
@@ -109,4 +110,5 @@ Example paths:
 - Before launching Docker, `cxhere` checks for `$CODEX_HOME/AGENTS.md` and offers to create it from the global template if missing.
 - In Docker mode, `cxhere` mounts the main repo at its original absolute path as read-only, and mounts only `<repo>/.git` read-write. This lets git worktree metadata function while preventing writes to the main non-worktree files.
 - The Docker image includes `xvfb-run`, so Playwright can launch headless browsers via `xvfb-run` if needed.
+- The Docker image now boots an internal PulseAudio server with a null sink, keeps its runtime/config state under `/tmp`, waits for it to become reachable, and exports `PULSE_SERVER`, `HARNESS_CAPTURE_WITH_FFMPEG=1`, and `HARNESS_CAPTURE_AUDIO_FORMAT=pulse` so ffmpeg-based Playwright screencasts can include browser audio by default.
 - If Docker is not running or the daemon is unreachable, `cxhere` will surface the Docker error output and exit non-zero.
