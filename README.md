@@ -69,6 +69,13 @@ Disable it with:
 CXHERE_GH=0 cxhere mpm/my-feature
 ```
 
+By default `cxhere` also mounts your host `~/.ssh` into Docker sessions as read-only at the container's effective home, and forwards `SSH_AUTH_SOCK` when present so Git-over-SSH works with agent-backed keys. Disable either behavior with:
+
+```bash
+CXHERE_SSH=0 cxhere mpm/my-feature
+CXHERE_SSH_AGENT=0 cxhere mpm/my-feature
+```
+
 By default `cxhere` also looks for an existing host ngrok config and mounts it into Docker sessions under `/tmp/ngrok-home` so `ngrok` reuses your saved authtoken and tunnel config. Disable or override that detection with:
 
 ```bash
@@ -116,6 +123,7 @@ Example paths:
 - After creating or reusing a worktree, `cxhere` checks for `.agent/PLANS.md` and offers to create it from the project template if missing.
 - Before launching Docker, `cxhere` checks for `$CODEX_HOME/AGENTS.md` and offers to create it from the global template if missing.
 - In Docker mode, `cxhere` mounts the main repo at its original absolute path as read-only, and mounts only `<repo>/.git` read-write. This lets git worktree metadata function while preventing writes to the main non-worktree files.
+- In Docker mode, `cxhere` mounts host `~/.ssh` read-only into `/home/codex/.ssh` by default, and forwards `SSH_AUTH_SOCK` to `/tmp/ssh-agent.sock` when the host exposes an agent socket.
 - In Docker mode, `cxhere` mounts the first matching host ngrok config directory from `CXHERE_NGROK_CONFIG_DIR`, `~/.config/ngrok`, `~/Library/Application Support/ngrok`, or `~/.ngrok2` into `/tmp/ngrok-home/.config/ngrok`, and the image's `ngrok` wrapper uses that path as its default config file.
 - The Docker image includes `xvfb-run`, so Playwright can launch headless browsers via `xvfb-run` if needed.
 - The Docker image includes the `ngrok` CLI.

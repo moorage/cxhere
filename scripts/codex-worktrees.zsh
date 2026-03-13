@@ -31,6 +31,12 @@ cxhere() {
   local -a docker_security_opts
   local gh_config_dir use_gh
   local -a gh_config_arg
+  local ssh_dir use_ssh
+  local -a ssh_dir_arg
+  local ssh_agent_sock use_ssh_agent
+  local -a ssh_agent_arg
+  local -a ssh_agent_env_arg
+  local ssh_mount_target ssh_agent_mount_target
   local ngrok_config_dir use_ngrok
   local -a ngrok_config_arg
   local ngrok_mount_target
@@ -70,6 +76,15 @@ cxhere() {
   use_gh=1
   gh_config_dir="$HOME/.config/gh"
   gh_config_arg=()
+  use_ssh=1
+  ssh_dir="$HOME/.ssh"
+  ssh_dir_arg=()
+  use_ssh_agent=1
+  ssh_agent_sock="${SSH_AUTH_SOCK:-}"
+  ssh_agent_arg=()
+  ssh_agent_env_arg=()
+  ssh_mount_target="/home/codex/.ssh"
+  ssh_agent_mount_target="/tmp/ssh-agent.sock"
   use_ngrok=1
   ngrok_config_dir=""
   ngrok_config_arg=()
@@ -94,6 +109,12 @@ cxhere() {
   esac
   case "${CXHERE_GH:-1}" in
     0|false|FALSE|no|NO|n|N) use_gh=0 ;;
+  esac
+  case "${CXHERE_SSH:-1}" in
+    0|false|FALSE|no|NO|n|N) use_ssh=0 ;;
+  esac
+  case "${CXHERE_SSH_AGENT:-1}" in
+    0|false|FALSE|no|NO|n|N) use_ssh_agent=0 ;;
   esac
   case "${CXHERE_NGROK:-1}" in
     0|false|FALSE|no|NO|n|N) use_ngrok=0 ;;
@@ -405,6 +426,21 @@ cxhere() {
         echo "warning: gh config not found at $gh_config_dir; skipping gh mount" >&2
       fi
 	    fi
+    if [ "$use_ssh" -eq 1 ]; then
+      if [ -d "$ssh_dir" ]; then
+        ssh_dir_arg=(-v "$ssh_dir":"$ssh_mount_target":ro)
+      else
+        echo "warning: ssh config not found at $ssh_dir; skipping ssh mount" >&2
+      fi
+    fi
+    if [ "$use_ssh_agent" -eq 1 ] && [ -n "$ssh_agent_sock" ]; then
+      if [ -S "$ssh_agent_sock" ]; then
+        ssh_agent_arg=(-v "$ssh_agent_sock":"$ssh_agent_mount_target")
+        ssh_agent_env_arg=(-e SSH_AUTH_SOCK="$ssh_agent_mount_target")
+      else
+        echo "warning: SSH_AUTH_SOCK is not a socket at $ssh_agent_sock; skipping ssh-agent mount" >&2
+      fi
+    fi
     if [ "$use_ngrok" -eq 1 ]; then
       if [ -n "$ngrok_config_dir" ] && [ -f "$ngrok_config_dir/ngrok.yml" ]; then
         ngrok_config_arg=(-v "$ngrok_config_dir":"$ngrok_mount_target":rw)
@@ -428,9 +464,12 @@ cxhere() {
 	      -v "$HOME/.gitconfig":/home/codex/.gitconfig:ro \
 	      -v "$HOME/.codex":/home/codex/.codex:rw \
 	      "${gh_config_arg[@]}" \
+	      "${ssh_dir_arg[@]}" \
+	      "${ssh_agent_arg[@]}" \
 	      "${ngrok_config_arg[@]}" \
 	      "${env_file_arg[@]}" \
 	      -e CODEX_HOME=/home/codex/.codex \
+	      -e GH_CONFIG_DIR=/home/codex/.config/gh \
 	      -e NPM_CONFIG_CACHE=/home/codex/.npm \
 	      -e TMPDIR=/tmp \
 	      -e HOME=/tmp/pulse-home \
@@ -442,6 +481,7 @@ cxhere() {
 	      -e PULSE_SERVER="${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
 	      -e PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
 	      -e PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+	      "${ssh_agent_env_arg[@]}" \
 	      -e HARNESS_CAPTURE_WITH_FFMPEG="${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
 	      -e HARNESS_CAPTURE_AUDIO_FORMAT="${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
 	      -w /workspace \

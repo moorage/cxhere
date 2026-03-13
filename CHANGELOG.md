@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-12
+- Updated `cxhere` to mount host `~/.ssh` read-only into Docker sessions by default so Git-over-SSH can reuse host keys and `known_hosts`.
+- Updated `cxhere` to forward `SSH_AUTH_SOCK` into Docker sessions when the host exposes an ssh-agent, so passphrase-protected keys can still authenticate without copying private key material.
+- Added `CXHERE_SSH=0` and `CXHERE_SSH_AGENT=0` escape hatches to disable the SSH config mount or agent forwarding per session.
+
 ## 2026-03-11
 - Added `ngrok` to the Docker image so it is available in Codex Docker sessions without extra per-container setup.
 - Updated `cxhere` to mount an existing host ngrok config directory into `/tmp/ngrok-home/.config/ngrok`, and added an `ngrok` wrapper that uses that path as the default config file so host auth and tunnel definitions persist across runs.
