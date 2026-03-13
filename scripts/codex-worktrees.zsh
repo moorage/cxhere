@@ -742,6 +742,10 @@ if [ -n "${ZSH_VERSION-}" ]; then
     fi
   }
 
+  _cxhere() {
+    _arguments '1:worktree name:_cxclose_complete' '2:session id: '
+  }
+
   _cxclose() {
     _arguments '1:worktree name:_cxclose_complete'
   }
@@ -751,18 +755,24 @@ if [ -n "${ZSH_VERSION-}" ]; then
   }
 
   if typeset -f compdef >/dev/null 2>&1; then
+    compdef _cxhere cxhere
     compdef _cxclose cxclose
     compdef _cxkill cxkill
   fi
 fi
 
 if [ -n "${BASH_VERSION-}" ]; then
-  _cxclose_bash_complete() {
+  _cxworktree_bash_complete() {
     local cur options
     cur="${COMP_WORDS[COMP_CWORD]}"
+    if [ "$COMP_CWORD" -ne 1 ]; then
+      COMPREPLY=()
+      return 0
+    fi
     options="$(cx_worktree_names | tr '\n' ' ')"
     COMPREPLY=($(compgen -W "$options" -- "$cur"))
   }
-  complete -F _cxclose_bash_complete cxclose 2>/dev/null || true
-  complete -F _cxclose_bash_complete cxkill 2>/dev/null || true
+  complete -F _cxworktree_bash_complete cxhere 2>/dev/null || true
+  complete -F _cxworktree_bash_complete cxclose 2>/dev/null || true
+  complete -F _cxworktree_bash_complete cxkill 2>/dev/null || true
 fi

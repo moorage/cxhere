@@ -42,7 +42,7 @@ mkdir -p ~/.codex
 cat /path/to/sandbox-docker/config.example.toml >> ~/.codex/config.toml
 ```
 
-## Use `cxhere`, `cxclose`, and `cxlist`
+## Use `cxhere`, `cxclose`, `cxkill`, and `cxlist`
 
 Start a Codex session in a dedicated git worktree + branch:
 
@@ -89,11 +89,19 @@ Cleanup when you're done:
 cxclose mpm/my-feature
 ```
 
+Stop Docker containers for an existing worktree without removing the worktree:
+
+```bash
+cxkill mpm/my-feature
+```
+
 List active Codex worktrees and flag anything prunable/stale:
 
 ```bash
 cxlist
 ```
+
+In shells with completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete existing Codex worktree branch names.
 
 ## Implementation and behavior notes
 
