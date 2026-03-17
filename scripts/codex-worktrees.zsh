@@ -29,8 +29,9 @@ cxhere() {
   local -a env_file_arg
   local seccomp_profile
   local -a docker_security_opts
-  local gh_config_dir use_gh
+  local gh_config_dir use_gh gh_token
   local -a gh_config_arg
+  local -a gh_token_arg
   local ssh_dir use_ssh
   local -a ssh_dir_arg
   local ssh_agent_sock use_ssh_agent
@@ -75,7 +76,9 @@ cxhere() {
   use_docker=1
   use_gh=1
   gh_config_dir="$HOME/.config/gh"
+  gh_token=""
   gh_config_arg=()
+  gh_token_arg=()
   use_ssh=1
   ssh_dir="$HOME/.ssh"
   ssh_dir_arg=()
@@ -425,7 +428,21 @@ cxhere() {
       else
         echo "warning: gh config not found at $gh_config_dir; skipping gh mount" >&2
       fi
-	    fi
+
+      if [ -n "${GH_TOKEN:-}" ]; then
+        gh_token="$GH_TOKEN"
+      elif [ -n "${GITHUB_TOKEN:-}" ]; then
+        gh_token="$GITHUB_TOKEN"
+      elif command -v gh >/dev/null 2>&1; then
+        gh_token="$(gh auth token 2>/dev/null || true)"
+      fi
+
+      if [ -n "$gh_token" ]; then
+        gh_token_arg=(-e GH_TOKEN="$gh_token")
+      else
+        echo "warning: no GitHub token available from GH_TOKEN, GITHUB_TOKEN, or gh auth token; container gh auth may be unavailable" >&2
+      fi
+		    fi
     if [ "$use_ssh" -eq 1 ]; then
       if [ -d "$ssh_dir" ]; then
         ssh_dir_arg=(-v "$ssh_dir":"$ssh_mount_target":ro)
@@ -461,11 +478,12 @@ cxhere() {
 	      -v "$worktree_dir":/workspace:rw \
 	      -v "$repo_root_mount":"$repo_root_mount":ro \
 	      -v "$repo_git_mount":"$repo_git_mount":rw \
-	      -v "$HOME/.gitconfig":/home/codex/.gitconfig:ro \
-	      -v "$HOME/.codex":/home/codex/.codex:rw \
-	      "${gh_config_arg[@]}" \
-	      "${ssh_dir_arg[@]}" \
-	      "${ssh_agent_arg[@]}" \
+		      -v "$HOME/.gitconfig":/home/codex/.gitconfig:ro \
+		      -v "$HOME/.codex":/home/codex/.codex:rw \
+		      "${gh_config_arg[@]}" \
+		      "${gh_token_arg[@]}" \
+		      "${ssh_dir_arg[@]}" \
+		      "${ssh_agent_arg[@]}" \
 	      "${ngrok_config_arg[@]}" \
 	      "${env_file_arg[@]}" \
 	      -e CODEX_HOME=/home/codex/.codex \

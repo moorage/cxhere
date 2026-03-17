@@ -62,7 +62,7 @@ Skip Docker and run the local `codex` CLI (still uses worktrees):
 CXHERE_NO_DOCKER=1 cxhere mpm/my-feature
 ```
 
-By default `cxhere` mounts your GitHub CLI config from `~/.config/gh` so `gh` can push and open PRs.
+By default `cxhere` mounts your GitHub CLI config from `~/.config/gh` so `gh` can push and open PRs. In Docker mode it also forwards a GitHub token from host `GH_TOKEN`/`GITHUB_TOKEN`, or falls back to `gh auth token`, so macOS keychain-backed `gh` auth works inside the container without copying credentials into the worktree.
 Disable it with:
 
 ```bash

@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-03-16
+- Updated `cxhere` to forward a GitHub token into Docker sessions by preferring host `GH_TOKEN` or `GITHUB_TOKEN` and falling back to `gh auth token`, so containerized `gh` can reuse host auth even when the host stores credentials in the macOS keychain.
+
 ## 2026-03-12
 - Updated `cxhere` to mount host `~/.ssh` read-only into Docker sessions by default so Git-over-SSH can reuse host keys and `known_hosts`.
 - Updated `cxhere` to forward `SSH_AUTH_SOCK` into Docker sessions when the host exposes an ssh-agent, so passphrase-protected keys can still authenticate without copying private key material.
