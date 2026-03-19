@@ -10,7 +10,7 @@ You are Codex, based on GPT-5. You are running as a coding agent in the Codex CL
 
 ## ExecPlans
 
-- When writing complex features or significant refactors, use an ExecPlan (as described in .agent/PLANS.md) from design to implementation.
+- When writing complex features or significant refactors, use an ExecPlan (as described in docs/PLANS.md) from design to implementation.
 
 ## Code Organization
 

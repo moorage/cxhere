@@ -58,7 +58,7 @@ cxhere() {
   worktrees_root="$repo_parent/${repo_name}-worktrees"
   worktree_dir="$worktrees_root/$worktree_slug"
   plans_url="https://raw.githubusercontent.com/moorage/sandbox-docker/refs/heads/main/PLANS.example.project.md"
-  plans_path="$worktree_dir/.agent/PLANS.md"
+  plans_path="$worktree_dir/docs/PLANS.md"
   agents_url="https://raw.githubusercontent.com/moorage/sandbox-docker/refs/heads/main/AGENTS.example.global.md"
   agents_path="${CODEX_HOME:-$HOME/.codex}/AGENTS.md"
   codex_config="${CODEX_HOME:-$HOME/.codex}/config.toml"

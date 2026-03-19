@@ -128,7 +128,7 @@ Example paths:
   - More than one: print a message and exit non-zero.
   - None: launch Docker with the existing worktree.
 - If `CXHERE_NO_DOCKER=1`, container checks are skipped and `codex` is run directly on the worktree.
-- After creating or reusing a worktree, `cxhere` checks for `.agent/PLANS.md` and offers to create it from the project template if missing.
+- After creating or reusing a worktree, `cxhere` checks for `docs/PLANS.md` and offers to create it from the project template if missing.
 - Before launching Docker, `cxhere` checks for `$CODEX_HOME/AGENTS.md` and offers to create it from the global template if missing.
 - In Docker mode, `cxhere` mounts the main repo at its original absolute path as read-only, and mounts only `<repo>/.git` read-write. This lets git worktree metadata function while preventing writes to the main non-worktree files.
 - In Docker mode, `cxhere` mounts host `~/.ssh` read-only into `/home/codex/.ssh` by default, and forwards `SSH_AUTH_SOCK` to `/tmp/ssh-agent.sock` when the host exposes an agent socket.
