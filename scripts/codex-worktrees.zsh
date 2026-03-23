@@ -112,7 +112,7 @@ cxhere() {
   ssh_agent_arg=()
   ssh_agent_env_arg=()
   container_ssh_agent_arg=()
-  ssh_mount_target="/home/codex/.ssh"
+  ssh_mount_target="/tmp/pulse-home/.ssh"
   ssh_agent_mount_target="/tmp/ssh-agent.sock"
   use_ngrok=1
   ngrok_config_dir=""
