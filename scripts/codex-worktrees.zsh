@@ -526,7 +526,7 @@ cxhere() {
       --volume "$worktree_dir:/workspace:rw" \
       --volume "$repo_root_mount:$repo_root_mount:ro" \
       --volume "$repo_git_mount:$repo_git_mount:rw" \
-      --volume "$HOME/.gitconfig:/home/codex/.gitconfig:ro" \
+      --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
       "${gh_config_arg[@]}" \
       "${gh_token_arg[@]}" \
@@ -536,6 +536,7 @@ cxhere() {
       "${env_file_arg[@]}" \
       --env CODEX_HOME=/home/codex/.codex \
       --env GH_CONFIG_DIR=/home/codex/.config/gh \
+      --env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig \
       --env NPM_CONFIG_CACHE=/home/codex/.npm \
       --env TMPDIR=/tmp \
       --env HOME=/tmp/pulse-home \
@@ -581,7 +582,7 @@ cxhere() {
       --tmpfs /home/codex \
       --volume "$worktree_dir:/workspace:rw" \
       --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
-      --volume "$HOME/.gitconfig:/home/codex/.gitconfig:ro" \
+      --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
       "${gh_config_arg[@]}" \
       "${gh_token_arg[@]}" \
@@ -591,6 +592,7 @@ cxhere() {
       "${env_file_arg[@]}" \
       --env CODEX_HOME=/home/codex/.codex \
       --env GH_CONFIG_DIR=/home/codex/.config/gh \
+      --env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig \
       --env NPM_CONFIG_CACHE=/tmp/npm-cache \
       --env TMPDIR=/tmp \
       --env HOME=/tmp/pulse-home \

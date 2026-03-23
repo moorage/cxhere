@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-03-23
+- Updated `cxhere` to mount host `~/.gitconfig` read-only at `/tmp/pulse-home/.gitconfig` and set `GIT_CONFIG_GLOBAL` to that path in both Docker and Apple `container` sessions, which keeps Git's global config isolated from `/home/codex` permission quirks while still preventing in-container edits to the host config file.
+
 ## 2026-03-20
 - Switched Apple `container` sessions from a raw `SSH_AUTH_SOCK` bind mount to native `container run --ssh` forwarding, which keeps the host ssh-agent usable as the non-root `codex` user for Git-over-SSH operations like pushing to GitHub.
 - Changed Apple `container` sessions to mount the full host repo root at its recorded absolute path instead of relying on a read-only repo mount plus nested `.git` bind mount, which restores Git worktree metadata resolution inside Apple-native containers.
