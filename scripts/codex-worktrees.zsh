@@ -48,11 +48,14 @@ cxhere() {
   local -a gh_token_arg
   local ssh_dir use_ssh
   local -a ssh_dir_arg
+  local -a container_gh_config_arg
+  local -a container_ssh_dir_arg
+  local -a container_ngrok_config_arg
   local ssh_agent_sock use_ssh_agent
   local -a ssh_agent_arg
   local -a ssh_agent_env_arg
   local -a container_ssh_agent_arg
-  local ssh_mount_target ssh_agent_mount_target
+  local ssh_mount_target ssh_codex_home_mount_target ssh_agent_mount_target
   local ngrok_config_dir use_ngrok
   local -a ngrok_config_arg
   local ngrok_mount_target
@@ -69,6 +72,12 @@ cxhere() {
   local running_container_id
   local running_image_id
   local local_image_id
+  local running_launch_config_hash
+  local launch_config_hash
+  local launch_config_gh_source
+  local launch_config_ssh_source
+  local launch_config_ssh_agent
+  local launch_config_ngrok_source
   local -a runtime_label_args
   local container_cpus
   local container_memory
@@ -107,12 +116,16 @@ cxhere() {
   use_ssh=1
   ssh_dir="$HOME/.ssh"
   ssh_dir_arg=()
+  container_gh_config_arg=()
+  container_ssh_dir_arg=()
+  container_ngrok_config_arg=()
   use_ssh_agent=1
   ssh_agent_sock="${SSH_AUTH_SOCK:-}"
   ssh_agent_arg=()
   ssh_agent_env_arg=()
   container_ssh_agent_arg=()
   ssh_mount_target="/tmp/pulse-home/.ssh"
+  ssh_codex_home_mount_target="/home/codex/.ssh"
   ssh_agent_mount_target="/tmp/ssh-agent.sock"
   use_ngrok=1
   ngrok_config_dir=""
@@ -156,6 +169,12 @@ cxhere() {
 
   if [ -n "${CXHERE_NGROK_CONFIG_DIR:-}" ]; then
     ngrok_config_dir="${CXHERE_NGROK_CONFIG_DIR%/}"
+  elif [ -f "$HOME/.config/ngrok/ngrok.yml" ]; then
+    ngrok_config_dir="$HOME/.config/ngrok"
+  elif [ -f "$HOME/Library/Application Support/ngrok/ngrok.yml" ]; then
+    ngrok_config_dir="$HOME/Library/Application Support/ngrok"
+  elif [ -f "$HOME/.ngrok2/ngrok.yml" ]; then
+    ngrok_config_dir="$HOME/.ngrok2"
   elif [ -d "$HOME/.config/ngrok" ]; then
     ngrok_config_dir="$HOME/.config/ngrok"
   elif [ -d "$HOME/Library/Application Support/ngrok" ]; then
@@ -269,50 +288,6 @@ cxhere() {
 
   mkdir -p "$worktrees_root"
   if git -C "$repo_root" worktree list --porcelain | rg -q "^worktree $worktree_dir$"; then
-    if [ "$local_mode" -eq 0 ]; then
-      matching_ids="$(cx_list_worktree_containers "$runtime" "$repo_root" "$worktree_dir" "$image_name" || true)"
-      other_runtime=""
-      other_matching_ids=""
-      case "$runtime" in
-        docker) other_runtime="container" ;;
-        container) other_runtime="docker" ;;
-      esac
-      if [ -n "$other_runtime" ] && cx_runtime_ready_silent "$other_runtime"; then
-        other_matching_ids="$(cx_list_worktree_containers "$other_runtime" "$repo_root" "$worktree_dir" "$image_name" || true)"
-      fi
-
-      if [ -n "$matching_ids" ] && [ -n "$other_matching_ids" ]; then
-        echo "containers are already running for worktree in both runtimes: $worktree_dir" >&2
-        echo "hint: run cxkill \"$branch_name\" to clean up stale sessions before retrying." >&2
-        return 1
-      fi
-
-      if [ -n "$other_matching_ids" ]; then
-        echo "$other_runtime container already running for worktree: $worktree_dir ($(printf "%s\n" "$other_matching_ids" | head -n1))" >&2
-        echo "hint: run cxkill \"$branch_name\" or set CXHERE_RUNTIME=$other_runtime to reuse that session." >&2
-        return 1
-      fi
-
-      if [ -n "$matching_ids" ]; then
-        match_count="$(printf "%s\n" "$matching_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
-        if [ "$match_count" -gt 1 ]; then
-          echo "multiple $runtime containers running for worktree: $worktree_dir" >&2
-          echo "example container: $(printf "%s\n" "$matching_ids" | head -n1)" >&2
-          return 1
-        fi
-        running_container_id="$(printf "%s\n" "$matching_ids" | head -n1)"
-        running_image_id="$(cx_container_image_identity "$runtime" "$running_container_id" || true)"
-        local_image_id="$(cx_local_image_identity "$runtime" "$image_name" || true)"
-
-        if [ -n "$running_image_id" ] && [ -n "$local_image_id" ] && [ "$running_image_id" != "$local_image_id" ]; then
-          echo "replacing stale $runtime container for worktree: $worktree_dir ($running_container_id)" >&2
-          cx_delete_runtime_containers "$runtime" "$running_container_id"
-        else
-          echo "$runtime container already running for worktree: $worktree_dir ($running_container_id)" >&2
-          return 0
-        fi
-      fi
-    fi
   else
     if [ -e "$worktree_dir" ]; then
       echo "worktree directory exists but is not registered: $worktree_dir" >&2
@@ -452,6 +427,11 @@ cxhere() {
   fi
 
   if [ "$local_mode" -eq 0 ]; then
+    launch_config_gh_source="none"
+    launch_config_ssh_source="none"
+    launch_config_ssh_agent="0"
+    launch_config_ngrok_source="none"
+
     runtime_label_args=(
       --label "${CXHERE_LABEL_REPO_KEY}=${repo_root}"
       --label "${CXHERE_LABEL_WORKTREE_KEY}=${worktree_dir}"
@@ -462,6 +442,8 @@ cxhere() {
     if [ "$use_gh" -eq 1 ]; then
       if [ -d "$gh_config_dir" ]; then
         gh_config_arg=(--volume "$gh_config_dir:/home/codex/.config/gh:rw")
+        container_gh_config_arg=(--volume "$gh_config_dir:/home/codex/.config/gh")
+        launch_config_gh_source="$gh_config_dir"
       else
         echo "warning: gh config not found at $gh_config_dir; skipping gh mount" >&2
       fi
@@ -483,7 +465,15 @@ cxhere() {
 
     if [ "$use_ssh" -eq 1 ]; then
       if [ -d "$ssh_dir" ]; then
-        ssh_dir_arg=(--volume "$ssh_dir:$ssh_mount_target:ro")
+        ssh_dir_arg=(
+          --volume "$ssh_dir:$ssh_mount_target:ro"
+          --volume "$ssh_dir:$ssh_codex_home_mount_target:ro"
+        )
+        container_ssh_dir_arg=(
+          --volume "$ssh_dir:$ssh_mount_target"
+          --volume "$ssh_dir:$ssh_codex_home_mount_target"
+        )
+        launch_config_ssh_source="$ssh_dir"
       else
         echo "warning: ssh config not found at $ssh_dir; skipping ssh mount" >&2
       fi
@@ -493,6 +483,7 @@ cxhere() {
       if [ -S "$ssh_agent_sock" ]; then
         ssh_agent_arg=(--volume "$ssh_agent_sock:$ssh_agent_mount_target")
         ssh_agent_env_arg=(--env "SSH_AUTH_SOCK=$ssh_agent_mount_target")
+        launch_config_ssh_agent="1"
       else
         echo "warning: SSH_AUTH_SOCK is not a socket at $ssh_agent_sock; skipping ssh-agent mount" >&2
       fi
@@ -501,8 +492,73 @@ cxhere() {
     if [ "$use_ngrok" -eq 1 ]; then
       if [ -n "$ngrok_config_dir" ] && [ -f "$ngrok_config_dir/ngrok.yml" ]; then
         ngrok_config_arg=(--volume "$ngrok_config_dir:$ngrok_mount_target:rw")
+        container_ngrok_config_arg=(--volume "$ngrok_config_dir:$ngrok_mount_target")
+        launch_config_ngrok_source="$ngrok_config_dir"
       elif [ -n "$ngrok_config_dir" ]; then
         echo "warning: ngrok config not found at $ngrok_config_dir/ngrok.yml; skipping ngrok mount" >&2
+      fi
+    fi
+
+    launch_config_hash="$(
+      cx_sha256_value "$(printf '%s\n' \
+        "launch_config_version=2" \
+        "runtime=$runtime" \
+        "gh=$launch_config_gh_source" \
+        "ssh=$launch_config_ssh_source" \
+        "ssh_agent=$launch_config_ssh_agent" \
+        "ngrok=$launch_config_ngrok_source")"
+    )" || return 1
+
+    runtime_label_args+=(
+      --label "${CXHERE_LABEL_LAUNCH_CONFIG_KEY}=${launch_config_hash}"
+    )
+  fi
+
+  if [ "$local_mode" -eq 0 ] && git -C "$repo_root" worktree list --porcelain | rg -q "^worktree $worktree_dir$"; then
+    matching_ids="$(cx_list_worktree_containers "$runtime" "$repo_root" "$worktree_dir" "$image_name" || true)"
+    other_runtime=""
+    other_matching_ids=""
+    case "$runtime" in
+      docker) other_runtime="container" ;;
+      container) other_runtime="docker" ;;
+    esac
+    if [ -n "$other_runtime" ] && cx_runtime_ready_silent "$other_runtime"; then
+      other_matching_ids="$(cx_list_worktree_containers "$other_runtime" "$repo_root" "$worktree_dir" "$image_name" || true)"
+    fi
+
+    if [ -n "$matching_ids" ] && [ -n "$other_matching_ids" ]; then
+      echo "containers are already running for worktree in both runtimes: $worktree_dir" >&2
+      echo "hint: run cxkill \"$branch_name\" to clean up stale sessions before retrying." >&2
+      return 1
+    fi
+
+    if [ -n "$other_matching_ids" ]; then
+      echo "$other_runtime container already running for worktree: $worktree_dir ($(printf "%s\n" "$other_matching_ids" | head -n1))" >&2
+      echo "hint: run cxkill \"$branch_name\" or set CXHERE_RUNTIME=$other_runtime to reuse that session." >&2
+      return 1
+    fi
+
+    if [ -n "$matching_ids" ]; then
+      match_count="$(printf "%s\n" "$matching_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+      if [ "$match_count" -gt 1 ]; then
+        echo "multiple $runtime containers running for worktree: $worktree_dir" >&2
+        echo "example container: $(printf "%s\n" "$matching_ids" | head -n1)" >&2
+        return 1
+      fi
+      running_container_id="$(printf "%s\n" "$matching_ids" | head -n1)"
+      running_image_id="$(cx_container_image_identity "$runtime" "$running_container_id" || true)"
+      local_image_id="$(cx_local_image_identity "$runtime" "$image_name" || true)"
+      running_launch_config_hash="$(cx_container_label_value "$runtime" "$running_container_id" "$CXHERE_LABEL_LAUNCH_CONFIG_KEY" || true)"
+
+      if [ -n "$running_image_id" ] && [ -n "$local_image_id" ] && [ "$running_image_id" != "$local_image_id" ]; then
+        echo "replacing stale $runtime container for worktree: $worktree_dir ($running_container_id)" >&2
+        cx_delete_runtime_containers "$runtime" "$running_container_id"
+      elif [ -z "$running_launch_config_hash" ] || [ "$running_launch_config_hash" != "$launch_config_hash" ]; then
+        echo "replacing stale $runtime container launch config for worktree: $worktree_dir ($running_container_id)" >&2
+        cx_delete_runtime_containers "$runtime" "$running_container_id"
+      else
+        echo "$runtime container already running for worktree: $worktree_dir ($running_container_id)" >&2
+        return 0
       fi
     fi
   fi
@@ -584,11 +640,11 @@ cxhere() {
       --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
       --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
-      "${gh_config_arg[@]}" \
+      "${container_gh_config_arg[@]}" \
       "${gh_token_arg[@]}" \
-      "${ssh_dir_arg[@]}" \
+      "${container_ssh_dir_arg[@]}" \
       "${container_ssh_agent_arg[@]}" \
-      "${ngrok_config_arg[@]}" \
+      "${container_ngrok_config_arg[@]}" \
       "${env_file_arg[@]}" \
       --env CODEX_HOME=/home/codex/.codex \
       --env GH_CONFIG_DIR=/home/codex/.config/gh \

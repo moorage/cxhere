@@ -2,6 +2,7 @@ CXHERE_LABEL_REPO_KEY="com.moorage.sandbox-docker.repo"
 CXHERE_LABEL_WORKTREE_KEY="com.moorage.sandbox-docker.worktree"
 CXHERE_LABEL_IMAGE_KEY="com.moorage.sandbox-docker.image"
 CXHERE_LABEL_RUNTIME_KEY="com.moorage.sandbox-docker.runtime"
+CXHERE_LABEL_LAUNCH_CONFIG_KEY="com.moorage.sandbox-docker.launch-config"
 
 cx_bool_is_true() {
   case "${1:-}" in
@@ -14,12 +15,29 @@ cx_json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/\//\\\//g'
 }
 
+cx_regex_escape() {
+  printf '%s' "$1" | sed -e 's/[][(){}.^$+*?|\\/]/\\&/g'
+}
+
 cx_extract_first_digest() {
   local input
   input="${1:-}"
   printf '%s' "$input" \
     | rg -o -m1 '"digest":"sha256:[0-9a-f]+"' \
     | sed -E 's/.*"digest":"([^"]+)".*/\1/'
+}
+
+cx_sha256_value() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    printf '%s' "$1" | sha256sum | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    printf '%s' "$1" | openssl dgst -sha256 -r | awk '{print $1}'
+  else
+    echo "no SHA-256 tool available (expected shasum, sha256sum, or openssl)" >&2
+    return 1
+  fi
 }
 
 cx_host_macos_major_version() {
@@ -185,6 +203,29 @@ cx_container_image_identity() {
     container)
       inspect_json="$(container inspect "$container_id" 2>/dev/null || true)"
       cx_extract_first_digest "$inspect_json"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+cx_container_label_value() {
+  local runtime container_id label_key inspect_json escaped_label_key
+  runtime="$1"
+  container_id="$2"
+  label_key="$3"
+  case "$runtime" in
+    docker)
+      docker inspect -f "{{with index .Config.Labels \"$label_key\"}}{{.}}{{end}}" "$container_id" 2>/dev/null || true
+      ;;
+    container)
+      inspect_json="$(container inspect "$container_id" 2>/dev/null || true)"
+      [ -n "$inspect_json" ] || return 0
+      escaped_label_key="$(cx_regex_escape "$label_key")"
+      printf '%s' "$inspect_json" \
+        | rg -o -m1 "\"${escaped_label_key}\":\"[^\"]*\"" \
+        | sed -E "s/.*\"${escaped_label_key}\":\"([^\"]*)\".*/\\1/"
       ;;
     *)
       return 1
