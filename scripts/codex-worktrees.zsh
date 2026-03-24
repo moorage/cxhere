@@ -49,6 +49,7 @@ cxhere() {
   local ssh_dir use_ssh
   local -a ssh_dir_arg
   local -a container_gh_config_arg
+  local -a container_gh_bootstrap_arg
   local -a container_ssh_dir_arg
   local -a container_ngrok_config_arg
   local ssh_agent_sock use_ssh_agent
@@ -67,6 +68,7 @@ cxhere() {
   local repo_root_mount repo_git_mount
   local container_repo_root_mount_mode
   local -a docker_resource_opts
+  local gh_host_mount_target
   local matching_ids other_matching_ids
   local match_count
   local running_container_id
@@ -117,6 +119,7 @@ cxhere() {
   ssh_dir="$HOME/.ssh"
   ssh_dir_arg=()
   container_gh_config_arg=()
+  container_gh_bootstrap_arg=()
   container_ssh_dir_arg=()
   container_ngrok_config_arg=()
   use_ssh_agent=1
@@ -127,6 +130,7 @@ cxhere() {
   ssh_mount_target="/tmp/pulse-home/.ssh"
   ssh_codex_home_mount_target="/home/codex/.ssh"
   ssh_agent_mount_target="/tmp/ssh-agent.sock"
+  gh_host_mount_target="/tmp/codex-host/gh"
   use_ngrok=1
   ngrok_config_dir=""
   ngrok_config_arg=()
@@ -442,7 +446,7 @@ cxhere() {
     if [ "$use_gh" -eq 1 ]; then
       if [ -d "$gh_config_dir" ]; then
         gh_config_arg=(--volume "$gh_config_dir:/home/codex/.config/gh:rw")
-        container_gh_config_arg=(--volume "$gh_config_dir:/home/codex/.config/gh")
+        container_gh_config_arg=(--volume "$gh_config_dir:$gh_host_mount_target:ro")
         launch_config_gh_source="$gh_config_dir"
       else
         echo "warning: gh config not found at $gh_config_dir; skipping gh mount" >&2
@@ -458,8 +462,11 @@ cxhere() {
 
       if [ -n "$gh_token" ]; then
         gh_token_arg=(--env "GH_TOKEN=$gh_token")
+        container_gh_bootstrap_arg=(--env "CXHERE_GH_TOKEN=$gh_token")
+        launch_config_gh_source="${launch_config_gh_source}+token"
       else
         echo "warning: no GitHub token available from GH_TOKEN, GITHUB_TOKEN, or gh auth token; container gh auth may be unavailable" >&2
+        launch_config_gh_source="${launch_config_gh_source}+config-only"
       fi
     fi
 
@@ -641,13 +648,14 @@ cxhere() {
       --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
       "${container_gh_config_arg[@]}" \
-      "${gh_token_arg[@]}" \
+      "${container_gh_bootstrap_arg[@]}" \
       "${container_ssh_dir_arg[@]}" \
       "${container_ssh_agent_arg[@]}" \
       "${container_ngrok_config_arg[@]}" \
       "${env_file_arg[@]}" \
       --env CODEX_HOME=/home/codex/.codex \
-      --env GH_CONFIG_DIR=/home/codex/.config/gh \
+      --env GH_CONFIG_DIR=/tmp/pulse-home/.config/gh \
+      --env "CXHERE_GH_HOST_CONFIG_DIR=$gh_host_mount_target" \
       --env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig \
       --env NPM_CONFIG_CACHE=/tmp/npm-cache \
       --env TMPDIR=/tmp \

@@ -69,10 +69,13 @@ RUN echo "codex cache bust: $NPM_CACHEBUST" >/dev/null && npm i -g @openai/codex
 RUN useradd -m -u 10001 -s /bin/bash codex
 
 RUN mv /usr/local/bin/ngrok /usr/local/bin/ngrok-real
+RUN mv /usr/bin/gh /usr/local/bin/gh-real
 COPY scripts/codex-entrypoint.sh /usr/local/bin/codex-entrypoint.sh
 COPY scripts/ngrok-wrapper.sh /usr/local/bin/ngrok
+COPY scripts/gh-wrapper.sh /usr/local/bin/gh
 RUN chmod +x /usr/local/bin/codex-entrypoint.sh
 RUN chmod +x /usr/local/bin/ngrok
+RUN chmod +x /usr/local/bin/gh
 
 USER codex
 WORKDIR /workspace

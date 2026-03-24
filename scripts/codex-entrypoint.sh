@@ -47,6 +47,33 @@ for dir in "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$(dirname "$PULSE_COOKIE")"; do
   fi
 done
 
+bootstrap_gh_auth() {
+  local gh_config_dir host_gh_config_dir
+
+  gh_config_dir="${GH_CONFIG_DIR:-$XDG_CONFIG_HOME/gh}"
+  host_gh_config_dir="${CXHERE_GH_HOST_CONFIG_DIR:-}"
+
+  export GH_CONFIG_DIR="$gh_config_dir"
+
+  if [ -n "$host_gh_config_dir" ] && [ -d "$host_gh_config_dir" ]; then
+    if ! mkdir -p "$gh_config_dir"; then
+      echo "warning: failed to create gh config dir at $gh_config_dir" >&2
+    elif [ "$host_gh_config_dir" != "$gh_config_dir" ] && ! cp -R "$host_gh_config_dir/." "$gh_config_dir/"; then
+      echo "warning: failed to copy gh config from $host_gh_config_dir to $gh_config_dir" >&2
+    fi
+  fi
+
+  if [ -n "${CXHERE_GH_TOKEN:-}" ] && command -v gh >/dev/null 2>&1; then
+    if ! printf '%s\n' "$CXHERE_GH_TOKEN" | GH_CONFIG_DIR="$gh_config_dir" GH_PROMPT_DISABLED=1 gh auth login --with-token -h github.com >/dev/null 2>&1; then
+      echo "warning: failed to bootstrap gh auth in $gh_config_dir" >&2
+    fi
+  fi
+
+  unset CXHERE_GH_TOKEN
+}
+
+bootstrap_gh_auth
+
 wait_for_pactl() {
   local attempts="${1:-20}"
   local sleep_seconds="${2:-0.1}"

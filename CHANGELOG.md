@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-03-23
+- Added a `gh` wrapper in the image so Apple `container` sessions keep resolving the session-local GitHub auth dir even when Codex runs `gh` in a stripped-down environment, which makes `gh auth status` work reliably after launch or reuse.
+- Updated Apple `container` sessions to copy the host `gh` config into a writable session-local config dir and materialize the host token there before Codex starts, so `gh auth status` still works even when the host stores credentials in the macOS keychain and later subprocesses do not inherit `GH_TOKEN`.
 - Updated `cxhere` to mount host `~/.gitconfig` read-only at `/tmp/pulse-home/.gitconfig` and set `GIT_CONFIG_GLOBAL` to that path in both Docker and Apple `container` sessions, which keeps Git's global config isolated from `/home/codex` permission quirks while still preventing in-container edits to the host config file.
 - Updated `cxhere` to mount host `~/.ssh` into both `/tmp/pulse-home/.ssh` and `/home/codex/.ssh` inside containerized sessions, which keeps the tmp-based home layout intact while letting OpenSSH and Git reliably pick up host keys, config, and `known_hosts` in Apple `container` mode.
 - Updated `cxhere` to prefer ngrok config directories that actually contain `ngrok.yml`, and to replace reused containers whose launch-config fingerprint no longer matches the current host integration mounts (including `ngrok`, `gh`, and SSH), so stale sessions do not silently miss newly available host config.

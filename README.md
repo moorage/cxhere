@@ -100,7 +100,7 @@ With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete kn
 | --- | --- | --- | --- |
 | `CXHERE_RUNTIME` | `auto` | `cxhere`, `cxkill` | Selects `container`, `docker`, or `local`. `auto` prefers a ready Apple runtime, then a ready Docker daemon. |
 | `CXHERE_NO_DOCKER` | unset | `cxhere`, `cxkill` | Legacy alias for local-mode runtime selection. |
-| `CXHERE_GH` | `1` | Containerized sessions | Mounts `~/.config/gh`. Also forwards `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token` when available. |
+| `CXHERE_GH` | `1` | Containerized sessions | Reuses host GitHub auth. Docker mounts `~/.config/gh`; Apple `container` copies it into a writable session-local config and bootstraps it from `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token` when available. |
 | `GH_TOKEN` / `GITHUB_TOKEN` | unset | Containerized sessions | Preferred GitHub token source forwarded into the session before falling back to `gh auth token`. |
 | `CXHERE_SSH` | `1` | Containerized sessions | Mounts host `~/.ssh` read-only into the session. |
 | `CXHERE_SSH_AGENT` | `1` | Containerized sessions | Forwards the host ssh-agent when the host exposes a socket. Docker uses a bind-mounted socket; Apple `container` uses native `--ssh` forwarding. |
