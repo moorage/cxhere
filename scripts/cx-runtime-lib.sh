@@ -282,6 +282,57 @@ cx_container_has_label_match() {
   printf '%s' "$inspect_json" | rg -F "\"${key}\":\"${escaped_value}\"" >/dev/null
 }
 
+cx_run_with_timeout() {
+  local timeout_seconds pid elapsed exit_code
+  timeout_seconds="$1"
+  shift
+  [ "$#" -gt 0 ] || return 0
+
+  "$@" &
+  pid=$!
+  elapsed=0
+
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$elapsed" -ge "$timeout_seconds" ]; then
+      kill -TERM "$pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "$pid" 2>/dev/null || true
+      wait "$pid" 2>/dev/null || true
+      return 124
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+
+  wait "$pid"
+  exit_code=$?
+  return "$exit_code"
+}
+
+cx_delete_container_runtime_containers() {
+  local cli_timeout stop_grace
+  cli_timeout="${CXHERE_CONTAINER_CLI_TIMEOUT:-15}"
+  stop_grace="${CXHERE_CONTAINER_STOP_GRACE:-5}"
+  [ "$#" -gt 0 ] || return 0
+
+  if cx_run_with_timeout "$cli_timeout" container stop --time "$stop_grace" "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "warning: Apple container stop timed out or failed; trying kill" >&2
+
+  if cx_run_with_timeout "$cli_timeout" container kill "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "warning: Apple container kill timed out or failed; trying delete --force" >&2
+
+  if cx_run_with_timeout "$cli_timeout" container delete --force "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "failed to terminate Apple container session(s); the container CLI did not finish within ${cli_timeout}s" >&2
+  return 1
+}
+
 cx_list_worktree_containers() {
   local runtime repo_root worktree_dir image_name ids id inspect_json
   runtime="$1"
@@ -326,7 +377,7 @@ cx_delete_runtime_containers() {
       docker stop "$@" >/dev/null
       ;;
     container)
-      container delete --force "$@" >/dev/null
+      cx_delete_container_runtime_containers "$@"
       ;;
     *)
       return 1

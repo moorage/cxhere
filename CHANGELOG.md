@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-03-25
+- Hardened Apple `container` shutdown in `cxkill` by replacing the direct `container delete --force` path with a bounded fallback chain (`stop` -> `kill` -> `delete --force`), so a wedged container CLI no longer hangs the caller's shell indefinitely.
+
 ## 2026-03-23
 - Added a `gh` wrapper in the image so Apple `container` sessions keep resolving the session-local GitHub auth dir even when Codex runs `gh` in a stripped-down environment, which makes `gh auth status` work reliably after launch or reuse.
 - Updated Apple `container` sessions to copy the host `gh` config into a writable session-local config dir and materialize the host token there before Codex starts, so `gh auth status` still works even when the host stores credentials in the macOS keychain and later subprocesses do not inherit `GH_TOKEN`.
