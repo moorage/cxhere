@@ -282,21 +282,51 @@ cx_container_has_label_match() {
   printf '%s' "$inspect_json" | rg -F "\"${key}\":\"${escaped_value}\"" >/dev/null
 }
 
+cx_container_launchd_label() {
+  printf 'com.apple.container.container-runtime-linux.%s\n' "$1"
+}
+
+cx_container_launchd_service_ref() {
+  printf 'gui/%s/%s\n' "$(id -u)" "$(cx_container_launchd_label "$1")"
+}
+
+cx_start_new_session() {
+  [ "$#" -gt 0 ] || return 0
+
+  # Run timeout-managed commands in their own session so a forced cleanup can
+  # terminate any helper processes the CLI spawned before it wedged.
+  exec perl -e '
+    use strict;
+    use warnings;
+    use POSIX qw(setsid);
+    setsid() or die "setsid failed: $!";
+    exec @ARGV or die "exec failed: $!";
+  ' -- "$@"
+}
+
+cx_kill_timeout_target() {
+  local leader_pid
+  leader_pid="$1"
+  [ -n "$leader_pid" ] || return 0
+
+  kill -TERM -- "-$leader_pid" 2>/dev/null || kill -TERM "$leader_pid" 2>/dev/null || true
+  sleep 1
+  kill -KILL -- "-$leader_pid" 2>/dev/null || kill -KILL "$leader_pid" 2>/dev/null || true
+}
+
 cx_run_with_timeout() {
   local timeout_seconds pid elapsed exit_code
   timeout_seconds="$1"
   shift
   [ "$#" -gt 0 ] || return 0
 
-  "$@" &
+  cx_start_new_session "$@" &
   pid=$!
   elapsed=0
 
   while kill -0 "$pid" 2>/dev/null; do
     if [ "$elapsed" -ge "$timeout_seconds" ]; then
-      kill -TERM "$pid" 2>/dev/null || true
-      sleep 1
-      kill -KILL "$pid" 2>/dev/null || true
+      cx_kill_timeout_target "$pid"
       wait "$pid" 2>/dev/null || true
       return 124
     fi
@@ -309,8 +339,31 @@ cx_run_with_timeout() {
   return "$exit_code"
 }
 
+cx_container_runtime_job_stopped() {
+  local container_id listed_ids
+  container_id="$1"
+  listed_ids="$(container list --quiet 2>/dev/null || true)"
+  if printf '%s\n' "$listed_ids" | rg -F -x "$container_id" >/dev/null; then
+    return 1
+  fi
+  return 0
+}
+
+cx_force_kill_container_runtime_job() {
+  local container_id service_ref
+  container_id="$1"
+  service_ref="$(cx_container_launchd_service_ref "$container_id")"
+
+  if ! launchctl kill SIGKILL "$service_ref" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  sleep 2
+  cx_container_runtime_job_stopped "$container_id"
+}
+
 cx_delete_container_runtime_containers() {
-  local cli_timeout stop_grace
+  local cli_timeout stop_grace container_id forced_count
   cli_timeout="${CXHERE_CONTAINER_CLI_TIMEOUT:-15}"
   stop_grace="${CXHERE_CONTAINER_STOP_GRACE:-5}"
   [ "$#" -gt 0 ] || return 0
@@ -326,6 +379,17 @@ cx_delete_container_runtime_containers() {
   echo "warning: Apple container kill timed out or failed; trying delete --force" >&2
 
   if cx_run_with_timeout "$cli_timeout" container delete --force "$@" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  forced_count=0
+  for container_id in "$@"; do
+    if cx_force_kill_container_runtime_job "$container_id"; then
+      forced_count=$((forced_count + 1))
+    fi
+  done
+  if [ "$forced_count" -eq "$#" ]; then
+    echo "warning: Apple container CLI stayed wedged; killed runtime job(s) via launchctl" >&2
     return 0
   fi
 

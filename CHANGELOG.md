@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-03-27
+- Fixed `cxkill`'s timeout helper to run Apple `container` CLI calls in their own session and kill the whole process group on timeout, so wedged helper subprocesses do not survive and keep the shutdown fallback loop stuck.
+- Added a last-resort Apple `container` fallback that kills the per-container launchd runtime job when `container stop`, `container kill`, and `container delete --force` all wedge on the same session.
+- Added `tests/test_cx_runtime_lib.sh` to cover the regression where a timed-out command leaves a child process behind.
+
 ## 2026-03-25
 - Hardened Apple `container` shutdown in `cxkill` by replacing the direct `container delete --force` path with a bounded fallback chain (`stop` -> `kill` -> `delete --force`), so a wedged container CLI no longer hangs the caller's shell indefinitely.
 
