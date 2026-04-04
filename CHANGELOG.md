@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-04-03
+- Added `cxharness`, which downloads the live `moorage/new-codex-project-harness` repo into the current directory after confirmation, creates any missing directories, and prompts before overwriting existing files.
 - Added a standalone `install.sh` bootstrapper for `~/.cxhere` installs that checks Apple `container` release freshness on macOS 26+, installs the latest `cxhere` GitHub release under `~/.cxhere/current`, offers to wire the shell RC file, and builds `codex-cli:local` when needed.
 - Renamed the project-facing package/repo references from `sandbox-docker` to `cxhere`, including installer URLs, GitHub release defaults, and runtime container labels.
 - Added release-aware `cxupdate` plus background release checks for `cxhere`, `cxclose`, `cxkill`, and `cxlist`, so commands can cache the latest available version without blocking and prompt the user to update when a newer release is available.

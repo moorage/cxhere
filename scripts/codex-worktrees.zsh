@@ -154,6 +154,89 @@ cxupdate() {
   echo "re-sourced cxhere commands from $(cx_current_link_path)/scripts/codex-worktrees.zsh" >&2
 }
 
+cxharness() {
+  local harness_slug harness_tarball_url temp_root extract_root source_root destination_root
+  local file_count copied_count skipped_count overwrite_count rel_path src_file dest_file dest_dir
+  local file_list
+
+  cx_command_prelude "cxharness"
+  harness_slug="moorage/new-codex-project-harness"
+  harness_tarball_url="https://codeload.github.com/${harness_slug}/tar.gz/refs/heads/main"
+  destination_root="$(pwd -P)"
+  temp_root="$(mktemp -d)" || return 1
+  trap 'rm -rf "$temp_root"' EXIT INT TERM
+  extract_root="$temp_root/extract"
+  mkdir -p "$extract_root"
+
+  if command -v curl >/dev/null 2>&1; then
+    if ! curl -fsSL "$harness_tarball_url" | tar -xz -C "$extract_root"; then
+      echo "failed to download harness from $harness_slug" >&2
+      return 1
+    fi
+  elif command -v wget >/dev/null 2>&1; then
+    if ! wget -qO- "$harness_tarball_url" | tar -xz -C "$extract_root"; then
+      echo "failed to download harness from $harness_slug" >&2
+      return 1
+    fi
+  else
+    echo "cxharness requires curl or wget" >&2
+    return 1
+  fi
+
+  source_root="$(find "$extract_root" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+  if [ -z "$source_root" ]; then
+    echo "failed to unpack harness repo" >&2
+    return 1
+  fi
+
+  file_list="$(cd "$source_root" && find . -path './.git' -prune -o -type f -print | sed 's#^\./##' | LC_ALL=C sort)"
+  file_count="$(printf '%s\n' "$file_list" | sed '/^$/d' | wc -l | tr -d ' ' )"
+  if [ "$file_count" -eq 0 ]; then
+    echo "no files found in harness repo" >&2
+    return 1
+  fi
+
+  echo "found $file_count harness files in $harness_slug" >&2
+  echo "destination: $destination_root" >&2
+  if ! cx_prompt_yes_no "Copy them into the current directory? [y/N] " N; then
+    echo "cancelled" >&2
+    return 0
+  fi
+
+  copied_count=0
+  skipped_count=0
+  overwrite_count=0
+  while IFS= read -r rel_path; do
+    [ -n "$rel_path" ] || continue
+    src_file="$source_root/$rel_path"
+    dest_file="$destination_root/$rel_path"
+    dest_dir="$(dirname "$dest_file")"
+    mkdir -p "$dest_dir"
+
+    if [ -d "$dest_file" ]; then
+      echo "skipping $rel_path because a directory already exists at that path" >&2
+      skipped_count=$((skipped_count + 1))
+      continue
+    fi
+
+    if [ -e "$dest_file" ]; then
+      if ! cx_prompt_yes_no "Overwrite $rel_path? [y/N] " N; then
+        skipped_count=$((skipped_count + 1))
+        continue
+      fi
+      rm -f "$dest_file"
+      overwrite_count=$((overwrite_count + 1))
+    fi
+
+    cp -p "$src_file" "$dest_file"
+    copied_count=$((copied_count + 1))
+  done <<EOF
+$file_list
+EOF
+
+  echo "cxharness complete: copied $copied_count file(s), overwrote $overwrite_count, skipped $skipped_count" >&2
+}
+
 cxhere() {
   cx_command_prelude "cxhere"
   # Run in a subshell so `set -e` can't terminate the caller's shell.

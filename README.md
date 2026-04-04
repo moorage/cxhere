@@ -105,6 +105,7 @@ cat /path/to/cxhere/config.example.toml >> ~/.codex/config.toml
 | `cxkill <worktree-name>` | Stop running container session(s) for that worktree without removing the worktree. |
 | `cxlist` | List managed Codex worktrees and show whether each one is `ok`, `locked`, or `prunable`. |
 | `cxupdate` | Stage the latest GitHub release under `~/.cxhere`, swap `current`, and re-source the updated commands into the current shell. |
+| `cxharness` | Import the live `moorage/new-codex-project-harness` repo into the current directory, prompting once before copy and again before overwriting any existing file. |
 
 Typical usage:
 
@@ -118,9 +119,11 @@ CXHERE_NO_DOCKER=1 cxhere mpm/my-feature
 
 With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete known Codex worktree branch names.
 
+`cxharness` downloads the current contents of `moorage/new-codex-project-harness`, recreates its directory/file structure in the current directory, and asks before overwriting any existing file.
+
 ## Updates
 
-- Every `cxhere`, `cxclose`, `cxkill`, `cxlist`, and `cxupdate` invocation kicks off a non-blocking release check in the background.
+- Every `cxhere`, `cxclose`, `cxkill`, `cxlist`, `cxupdate`, and `cxharness` invocation kicks off a non-blocking release check in the background.
 - The latest discovered release is cached under `~/.cxhere/state/latest-release`.
 - When the cached version is newer than the sourced version, commands print an update notice and tell the user to run `cxupdate`.
 - If the shell still has an older sourced copy after `~/.cxhere/current` moved forward, commands warn once and print the `source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"` fixup command.
