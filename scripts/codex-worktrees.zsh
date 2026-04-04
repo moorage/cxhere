@@ -673,8 +673,6 @@ cxhere() {
         gh_config_arg=(--volume "$gh_config_dir:/home/codex/.config/gh:rw")
         container_gh_config_arg=(--volume "$gh_config_dir:$gh_host_mount_target:ro")
         launch_config_gh_source="$gh_config_dir"
-      else
-        echo "warning: gh config not found at $gh_config_dir; skipping gh mount" >&2
       fi
 
       if [ -n "${GH_TOKEN:-}" ]; then
@@ -689,8 +687,7 @@ cxhere() {
         gh_token_arg=(--env "GH_TOKEN=$gh_token")
         container_gh_bootstrap_arg=(--env "CXHERE_GH_TOKEN=$gh_token")
         launch_config_gh_source="${launch_config_gh_source}+token"
-      else
-        echo "warning: no GitHub token available from GH_TOKEN, GITHUB_TOKEN, or gh auth token; container gh auth may be unavailable" >&2
+      elif [ "$launch_config_gh_source" != "none" ]; then
         launch_config_gh_source="${launch_config_gh_source}+config-only"
       fi
     fi
