@@ -177,3 +177,10 @@ npx playwright install chromium
 ```
 
 If you want the migration research and validation notes behind the current runtime behavior, see `docs/apple-container-migration.execplan.md`.
+
+## Chrome Status
+
+- `amd64` image builds install `google-chrome-stable`.
+- Native `arm64` image builds do not currently include a system Chrome or Chromium package.
+- On Apple silicon, use `CX_BUILD_RUNTIME=container CX_BUILD_PLATFORM=linux/amd64 ./scripts/build-local.sh` if you specifically need Google Chrome in the image.
+- To run that `amd64` image through `cxhere`, set `CXHERE_RUNTIME=container` and `CXHERE_CONTAINER_PLATFORM=linux/amd64`. Rosetta is enabled automatically for that path.
