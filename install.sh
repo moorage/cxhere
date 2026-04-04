@@ -11,7 +11,7 @@ else
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd -P)"
-CXHERE_DEFAULT_REPO_SLUG="${CXHERE_REPO_SLUG:-moorage/sandbox-docker}"
+CXHERE_DEFAULT_REPO_SLUG="${CXHERE_REPO_SLUG:-moorage/cxhere}"
 CXHERE_RELEASES_API="${CXHERE_RELEASES_API:-https://api.github.com/repos/${CXHERE_DEFAULT_REPO_SLUG}/releases/latest}"
 CXHERE_RELEASES_PAGE="${CXHERE_RELEASES_PAGE:-https://github.com/${CXHERE_DEFAULT_REPO_SLUG}/releases}"
 CXHERE_APPLE_CONTAINER_RELEASES_API="https://api.github.com/repos/apple/container/releases/latest"
@@ -242,11 +242,11 @@ cx_install_latest_release() {
   tarball_url="$(printf '%s\n' "$metadata" | sed -n 's/^tarball_url=//p' | head -n1)"
   release_url="$(printf '%s\n' "$metadata" | sed -n 's/^url=//p' | head -n1)"
   [ -n "$version" ] || {
-    echo "failed to resolve latest sandbox-docker release version" >&2
+    echo "failed to resolve latest cxhere release version" >&2
     return 1
   }
   [ -n "$tarball_url" ] || {
-    echo "failed to resolve tarball URL for sandbox-docker $version" >&2
+    echo "failed to resolve tarball URL for cxhere $version" >&2
     return 1
   }
 
@@ -355,7 +355,7 @@ main() {
   local installed_version current_script
   cx_check_macos_and_container_release
   installed_version="$(cx_install_latest_release)"
-  echo "installed sandbox-docker release $installed_version into $(cx_current_link_path)" >&2
+  echo "installed cxhere release $installed_version into $(cx_current_link_path)" >&2
   cx_ensure_shell_rc_source
   current_script="$(cx_current_link_path)/scripts/codex-worktrees.zsh"
   if [ "$CXHERE_INSTALLER_SOURCED" = "1" ]; then

@@ -1,6 +1,6 @@
-# sandbox-docker
+# cxhere
 
-This repo runs Codex CLI inside a Linux container and gives each session its own git worktree, so you can run multiple Codex sessions against the same repo without sharing a checkout.
+`cxhere` runs Codex CLI inside a Linux container and gives each session its own git worktree, so you can run multiple Codex sessions against the same repo without sharing a checkout.
 
 ## Runtime Model
 
@@ -22,13 +22,19 @@ This repo runs Codex CLI inside a Linux container and gives each session its own
 The intended end-user path is a per-user install under `~/.cxhere` backed by the latest GitHub release.
 
 ```bash
-bash ./install.sh
+curl -fsSL https://raw.githubusercontent.com/moorage/cxhere/main/install.sh | bash
+```
+
+or:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/moorage/cxhere/main/install.sh | bash
 ```
 
 `install.sh` does the following:
 
 - On macOS 26+, checks the latest `apple/container` GitHub release against `container --version`, and offers to open the release page if the host is missing or behind.
-- Downloads the latest `moorage/sandbox-docker` release into `~/.cxhere/releases/<version>` and repoints `~/.cxhere/current`.
+- Downloads the latest `moorage/cxhere` release into `~/.cxhere/releases/<version>` and repoints `~/.cxhere/current`.
 - Offers to add `source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"` to the active shell RC file.
 - If the installer itself was sourced, re-sources the freshly installed commands into the current shell.
 - If no ready runtime has a local `codex-cli:local` image yet, builds it immediately. If one already exists, offers to rebuild it.
@@ -66,7 +72,7 @@ CX_BUILD_RUNTIME=all ./scripts/build-local.sh
 If you are working from a checkout instead of a `~/.cxhere` install, source the helper script from your shell config:
 
 ```bash
-source /path/to/sandbox-docker/scripts/codex-worktrees.zsh
+source /path/to/cxhere/scripts/codex-worktrees.zsh
 ```
 
 Reload the shell config you actually use:
@@ -81,12 +87,12 @@ Optional setup:
 
 ```bash
 mkdir -p ~/.codex/rules
-cp /path/to/sandbox-docker/default.example.rules ~/.codex/rules/default.rules
+cp /path/to/cxhere/default.example.rules ~/.codex/rules/default.rules
 ```
 
 ```bash
 mkdir -p ~/.codex
-cat /path/to/sandbox-docker/config.example.toml >> ~/.codex/config.toml
+cat /path/to/cxhere/config.example.toml >> ~/.codex/config.toml
 ```
 
 ## Commands

@@ -135,7 +135,7 @@ The README is now organized around runtime choice rather than "Docker mode" alon
 
 ## Concrete Steps
 
-Run the following commands from the repository root at `/Users/matthewmoore/Projects/sandbox-docker`.
+Run the following commands from the repository root at `/Users/matthewmoore/Projects/cxhere`.
 
 First, validate the Apple runtime prerequisites and version:
 
@@ -257,9 +257,9 @@ Use these environment variables as the stable public surface:
 
 Labels added to launched containers should be stable and runtime-neutral. At minimum, define:
 
-    com.moorage.sandbox-docker.repo=<repo_root>
-    com.moorage.sandbox-docker.worktree=<worktree_dir>
-    com.moorage.sandbox-docker.image=codex-cli:local
-    com.moorage.sandbox-docker.runtime=<container|docker>
+    com.moorage.cxhere.repo=<repo_root>
+    com.moorage.cxhere.worktree=<worktree_dir>
+    com.moorage.cxhere.image=codex-cli:local
+    com.moorage.cxhere.runtime=<container|docker>
 
 Revision note: Created on 2026-03-20 after researching Apple `container`, Playwright Linux dependencies, and Node.js `25.8.1`, and after landing the first milestone that replaced the Microsoft Playwright base image with an explicit Ubuntu image build now targeting Ubuntu 25.10.
