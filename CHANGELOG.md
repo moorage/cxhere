@@ -1,6 +1,9 @@
 # Changelog
 
 ## 2026-04-03
+- Added a standalone `install.sh` bootstrapper for `~/.cxhere` installs that checks Apple `container` release freshness on macOS 26+, installs the latest `sandbox-docker` GitHub release under `~/.cxhere/current`, offers to wire the shell RC file, and builds `codex-cli:local` when needed.
+- Added release-aware `cxupdate` plus background release checks for `cxhere`, `cxclose`, `cxkill`, and `cxlist`, so commands can cache the latest available version without blocking and prompt the user to update when a newer release is available.
+- Added version tracking via `VERSION` and stale-source detection so commands can tell when the shell has older sourced functions than the version currently pointed to by `~/.cxhere/current`.
 - Added `xdotool` to the image and made browser installation architecture-aware so `google-chrome-stable` is installed only on `amd64` builds while native `arm64` builds skip a system browser.
 - Added `CX_BUILD_PLATFORM` to Apple `container` builds plus `CXHERE_CONTAINER_PLATFORM` and `CXHERE_CONTAINER_ROSETTA` to Apple `container` sessions, so Apple silicon hosts can build and run `linux/amd64` images when Chrome is required.
 - Updated `README.md` to document the new platform flags and clarify that Google Chrome is only included on `amd64` builds.

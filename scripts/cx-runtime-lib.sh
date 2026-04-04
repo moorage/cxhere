@@ -3,12 +3,261 @@ CXHERE_LABEL_WORKTREE_KEY="com.moorage.sandbox-docker.worktree"
 CXHERE_LABEL_IMAGE_KEY="com.moorage.sandbox-docker.image"
 CXHERE_LABEL_RUNTIME_KEY="com.moorage.sandbox-docker.runtime"
 CXHERE_LABEL_LAUNCH_CONFIG_KEY="com.moorage.sandbox-docker.launch-config"
+CXHERE_DEFAULT_REPO_SLUG="moorage/sandbox-docker"
+CXHERE_DEFAULT_RELEASES_API="https://api.github.com/repos/${CXHERE_DEFAULT_REPO_SLUG}/releases/latest"
+CXHERE_DEFAULT_RELEASES_PAGE="https://github.com/${CXHERE_DEFAULT_REPO_SLUG}/releases"
+CXHERE_DEFAULT_APPLE_CONTAINER_RELEASES_API="https://api.github.com/repos/apple/container/releases/latest"
+CXHERE_DEFAULT_APPLE_CONTAINER_RELEASES_PAGE="https://github.com/apple/container/releases"
+CXHERE_UPDATE_CACHE_TTL_SECONDS="${CXHERE_UPDATE_CACHE_TTL_SECONDS:-86400}"
 
 cx_bool_is_true() {
   case "${1:-}" in
     1|true|TRUE|yes|YES|y|Y|on|ON) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+cx_read_first_line() {
+  local file_path
+  file_path="$1"
+  [ -f "$file_path" ] || return 1
+  IFS= read -r _cx_read_first_line_value < "$file_path" || true
+  printf '%s\n' "${_cx_read_first_line_value:-}"
+}
+
+cx_trim_version_prefix() {
+  local raw
+  raw="${1:-}"
+  raw="${raw#container CLI version }"
+  raw="${raw#v}"
+  printf '%s\n' "$raw"
+}
+
+cx_version_sort_key() {
+  local raw major minor patch extra
+  raw="$(cx_trim_version_prefix "${1:-}")"
+  major=0
+  minor=0
+  patch=0
+  extra=0
+  IFS=. read -r major minor patch extra <<EOF
+$raw
+EOF
+  major="${major%%[^0-9]*}"
+  minor="${minor%%[^0-9]*}"
+  patch="${patch%%[^0-9]*}"
+  printf '%06d%06d%06d\n' "${major:-0}" "${minor:-0}" "${patch:-0}"
+}
+
+cx_version_gt() {
+  [ "$(cx_version_sort_key "$1")" \> "$(cx_version_sort_key "$2")" ]
+}
+
+cx_version_lt() {
+  [ "$(cx_version_sort_key "$1")" \< "$(cx_version_sort_key "$2")" ]
+}
+
+cx_curl_get() {
+  curl -fsSL --connect-timeout 5 --max-time 20 "$1"
+}
+
+cx_extract_release_tag_from_json() {
+  printf '%s' "$1" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+}
+
+cx_extract_release_url_from_json() {
+  printf '%s' "$1" | sed -n 's/.*"html_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+}
+
+cx_extract_release_tarball_url_from_json() {
+  printf '%s' "$1" | sed -n 's/.*"tarball_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+}
+
+cx_repo_slug() {
+  printf '%s\n' "${CXHERE_REPO_SLUG:-$CXHERE_DEFAULT_REPO_SLUG}"
+}
+
+cx_release_api_url() {
+  printf '%s\n' "${CXHERE_RELEASES_API:-https://api.github.com/repos/$(cx_repo_slug)/releases/latest}"
+}
+
+cx_release_page_url() {
+  printf '%s\n' "${CXHERE_RELEASES_PAGE:-https://github.com/$(cx_repo_slug)/releases}"
+}
+
+cx_home_dir() {
+  printf '%s\n' "${CXHERE_HOME:-$HOME/.cxhere}"
+}
+
+cx_release_root_dir() {
+  printf '%s\n' "$(cx_home_dir)/releases"
+}
+
+cx_current_link_path() {
+  printf '%s\n' "$(cx_home_dir)/current"
+}
+
+cx_state_dir() {
+  printf '%s\n' "$(cx_home_dir)/state"
+}
+
+cx_stage_dir() {
+  printf '%s\n' "$(cx_home_dir)/staging"
+}
+
+cx_update_state_file() {
+  printf '%s\n' "$(cx_state_dir)/latest-release"
+}
+
+cx_update_lock_dir() {
+  printf '%s\n' "$(cx_state_dir)/update-check.lock"
+}
+
+cx_loaded_version() {
+  printf '%s\n' "${CXHERE_VERSION:-dev}"
+}
+
+cx_current_installed_version() {
+  local version_file current_link
+  current_link="$(cx_current_link_path)"
+  version_file="$current_link/VERSION"
+  cx_read_first_line "$version_file" 2>/dev/null || true
+}
+
+cx_loaded_release_root() {
+  if [ -n "${CXHERE_RELEASE_ROOT:-}" ]; then
+    printf '%s\n' "$CXHERE_RELEASE_ROOT"
+  elif [ -n "${CXHERE_SCRIPT_DIR:-}" ]; then
+    cd "$CXHERE_SCRIPT_DIR/.." >/dev/null 2>&1 && pwd -P
+  else
+    return 1
+  fi
+}
+
+cx_write_release_state() {
+  local state_file version url checked_at
+  state_file="$1"
+  version="$2"
+  url="$3"
+  checked_at="$4"
+  mkdir -p "$(dirname "$state_file")"
+  cat > "$state_file" <<EOF
+latest_version=$version
+release_url=$url
+checked_at=$checked_at
+EOF
+}
+
+cx_read_release_state_value() {
+  local state_file key
+  state_file="$1"
+  key="$2"
+  [ -f "$state_file" ] || return 1
+  sed -n "s/^${key}=//p" "$state_file" | head -n1
+}
+
+cx_update_state_latest_version() {
+  cx_read_release_state_value "$(cx_update_state_file)" latest_version 2>/dev/null || true
+}
+
+cx_update_state_release_url() {
+  cx_read_release_state_value "$(cx_update_state_file)" release_url 2>/dev/null || true
+}
+
+cx_update_state_checked_at() {
+  cx_read_release_state_value "$(cx_update_state_file)" checked_at 2>/dev/null || true
+}
+
+cx_now_epoch() {
+  date +%s
+}
+
+cx_update_state_is_fresh() {
+  local checked_at now age
+  checked_at="$(cx_update_state_checked_at)"
+  [ -n "$checked_at" ] || return 1
+  now="$(cx_now_epoch)"
+  age=$((now - checked_at))
+  [ "$age" -lt "$CXHERE_UPDATE_CACHE_TTL_SECONDS" ]
+}
+
+cx_fetch_latest_release_metadata() {
+  local release_json latest_version release_url tarball_url
+  release_json="$(cx_curl_get "$(cx_release_api_url)")" || return 1
+  latest_version="$(cx_extract_release_tag_from_json "$release_json")"
+  release_url="$(cx_extract_release_url_from_json "$release_json")"
+  tarball_url="$(cx_extract_release_tarball_url_from_json "$release_json")"
+  [ -n "$latest_version" ] || return 1
+  [ -n "$release_url" ] || release_url="$(cx_release_page_url)"
+  printf 'version=%s\nurl=%s\ntarball_url=%s\n' "$latest_version" "$release_url" "$tarball_url"
+}
+
+cx_background_update_check() {
+  local lock_dir metadata latest_version release_url checked_at
+  lock_dir="$(cx_update_lock_dir)"
+  mkdir -p "$(cx_state_dir)"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    return 0
+  fi
+  trap 'rmdir "$lock_dir" >/dev/null 2>&1 || true' EXIT INT TERM
+  metadata="$(cx_fetch_latest_release_metadata 2>/dev/null)" || return 0
+  latest_version="$(printf '%s\n' "$metadata" | sed -n 's/^version=//p' | head -n1)"
+  release_url="$(printf '%s\n' "$metadata" | sed -n 's/^url=//p' | head -n1)"
+  checked_at="$(cx_now_epoch)"
+  [ -n "$latest_version" ] || return 0
+  cx_write_release_state "$(cx_update_state_file)" "$latest_version" "$release_url" "$checked_at"
+}
+
+cx_kickoff_background_update_check() {
+  if cx_update_state_is_fresh; then
+    return 0
+  fi
+  (
+    cx_background_update_check
+  ) >/dev/null 2>&1 &
+}
+
+cx_print_update_notice_if_needed() {
+  local latest_version release_url loaded_version
+  latest_version="$(cx_update_state_latest_version)"
+  [ -n "$latest_version" ] || return 0
+  loaded_version="$(cx_loaded_version)"
+  if ! cx_version_gt "$latest_version" "$loaded_version"; then
+    return 0
+  fi
+  release_url="$(cx_update_state_release_url)"
+  echo "update available for cxhere: $loaded_version -> $latest_version" >&2
+  echo "run: cxupdate" >&2
+  if [ -n "$release_url" ]; then
+    echo "release notes: $release_url" >&2
+  fi
+}
+
+cx_warn_if_stale_shell_source() {
+  local current_version loaded_version
+  current_version="$(cx_current_installed_version)"
+  loaded_version="$(cx_loaded_version)"
+  [ -n "$current_version" ] || return 0
+  [ "$current_version" = "$loaded_version" ] && return 0
+  if [ "${CXHERE_STALE_SOURCE_WARNED:-0}" = "1" ]; then
+    return 0
+  fi
+  CXHERE_STALE_SOURCE_WARNED=1
+  export CXHERE_STALE_SOURCE_WARNED
+  echo "cxhere commands are loaded from $loaded_version, but ~/.cxhere/current is $current_version" >&2
+  echo "run: source \"$HOME/.cxhere/current/scripts/codex-worktrees.zsh\"" >&2
+}
+
+cx_command_prelude() {
+  local command_name skip_update_check
+  command_name="${1:-}"
+  skip_update_check="${2:-0}"
+  cx_warn_if_stale_shell_source
+  cx_print_update_notice_if_needed
+  if [ "$skip_update_check" != "1" ]; then
+    cx_kickoff_background_update_check
+  fi
+  : "$command_name"
 }
 
 cx_json_escape() {

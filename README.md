@@ -17,6 +17,24 @@ This repo runs Codex CLI inside a Linux container and gives each session its own
 - For Apple `container`: Apple silicon, macOS 26+, `container` installed, and `container system start`
 - Optional host config reused by sessions: `gh`, `~/.ssh`, `SSH_AUTH_SOCK`, `ngrok`
 
+## Install
+
+The intended end-user path is a per-user install under `~/.cxhere` backed by the latest GitHub release.
+
+```bash
+bash ./install.sh
+```
+
+`install.sh` does the following:
+
+- On macOS 26+, checks the latest `apple/container` GitHub release against `container --version`, and offers to open the release page if the host is missing or behind.
+- Downloads the latest `moorage/sandbox-docker` release into `~/.cxhere/releases/<version>` and repoints `~/.cxhere/current`.
+- Offers to add `source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"` to the active shell RC file.
+- If the installer itself was sourced, re-sources the freshly installed commands into the current shell.
+- If no ready runtime has a local `codex-cli:local` image yet, builds it immediately. If one already exists, offers to rebuild it.
+
+Note: this repository currently needs a published GitHub release for `install.sh` and `cxupdate` to fetch from. Until a first tagged release exists, the release-backed installer path will fail intentionally instead of silently falling back to an arbitrary checkout.
+
 ## Build The Local Image
 
 The image tag is `codex-cli:local`.
@@ -45,7 +63,7 @@ CX_BUILD_RUNTIME=all ./scripts/build-local.sh
 
 ## Shell Setup
 
-Source the helper script from your shell config:
+If you are working from a checkout instead of a `~/.cxhere` install, source the helper script from your shell config:
 
 ```bash
 source /path/to/sandbox-docker/scripts/codex-worktrees.zsh
@@ -80,6 +98,7 @@ cat /path/to/sandbox-docker/config.example.toml >> ~/.codex/config.toml
 | `cxclose <worktree-name>` | Remove a clean worktree and delete its branch. |
 | `cxkill <worktree-name>` | Stop running container session(s) for that worktree without removing the worktree. |
 | `cxlist` | List managed Codex worktrees and show whether each one is `ok`, `locked`, or `prunable`. |
+| `cxupdate` | Stage the latest GitHub release under `~/.cxhere`, swap `current`, and re-source the updated commands into the current shell. |
 
 Typical usage:
 
@@ -92,6 +111,13 @@ CXHERE_NO_DOCKER=1 cxhere mpm/my-feature
 ```
 
 With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete known Codex worktree branch names.
+
+## Updates
+
+- Every `cxhere`, `cxclose`, `cxkill`, `cxlist`, and `cxupdate` invocation kicks off a non-blocking release check in the background.
+- The latest discovered release is cached under `~/.cxhere/state/latest-release`.
+- When the cached version is newer than the sourced version, commands print an update notice and tell the user to run `cxupdate`.
+- If the shell still has an older sourced copy after `~/.cxhere/current` moved forward, commands warn once and print the `source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"` fixup command.
 
 ## Session Flags
 

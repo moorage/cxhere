@@ -7,12 +7,155 @@ elif [ -n "${BASH_SOURCE[0]-}" ]; then
 else
   CXHERE_SCRIPT_SOURCE="$0"
 fi
-CXHERE_SCRIPT_DIR="$(cd "$(dirname "$CXHERE_SCRIPT_SOURCE")" && pwd)"
+CXHERE_SCRIPT_DIR="$(cd "$(dirname "$CXHERE_SCRIPT_SOURCE")" && pwd -P)"
+CXHERE_RELEASE_ROOT="$(cd "$CXHERE_SCRIPT_DIR/.." && pwd -P)"
 
 # shellcheck source=./cx-runtime-lib.sh
 . "$CXHERE_SCRIPT_DIR/cx-runtime-lib.sh"
 
+CXHERE_VERSION_FILE="$CXHERE_RELEASE_ROOT/VERSION"
+CXHERE_VERSION="$(cx_read_first_line "$CXHERE_VERSION_FILE" 2>/dev/null || true)"
+if [ -z "$CXHERE_VERSION" ]; then
+  CXHERE_VERSION="dev"
+fi
+export CXHERE_RELEASE_ROOT
+export CXHERE_VERSION
+
+cx_install_source_line() {
+  printf 'source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"\n'
+}
+
+cx_detect_shell_rc_file() {
+  local shell_name
+  shell_name="$(basename "${SHELL:-}")"
+  case "$shell_name" in
+    zsh)
+      printf '%s\n' "$HOME/.zshrc"
+      ;;
+    bash)
+      if [ -f "$HOME/.bash_profile" ]; then
+        printf '%s\n' "$HOME/.bash_profile"
+      else
+        printf '%s\n' "$HOME/.bashrc"
+      fi
+      ;;
+    *)
+      printf '%s\n' "$HOME/.profile"
+      ;;
+  esac
+}
+
+cx_source_current_release() {
+  local current_script
+  current_script="$(cx_current_link_path)/scripts/codex-worktrees.zsh"
+  if [ -f "$current_script" ]; then
+    # shellcheck source=/dev/null
+    . "$current_script"
+    return 0
+  fi
+  echo "current cxhere install not found at $current_script" >&2
+  return 1
+}
+
+cx_release_exists_locally() {
+  local version
+  version="$1"
+  [ -n "$version" ] || return 1
+  [ -d "$(cx_release_root_dir)/$version" ]
+}
+
+cx_stage_release_download() {
+  local version tarball_url stage_root temp_root extract_root top_dir
+  version="$1"
+  tarball_url="$2"
+  stage_root="$(cx_stage_dir)/$version"
+  temp_root="${stage_root}.tmp.$$"
+  rm -rf "$temp_root"
+  mkdir -p "$temp_root"
+  if [ -z "$tarball_url" ]; then
+    echo "release tarball URL missing for version $version" >&2
+    rm -rf "$temp_root"
+    return 1
+  fi
+  extract_root="$temp_root/extract"
+  mkdir -p "$extract_root"
+  curl -fsSL "$tarball_url" | tar -xz -C "$extract_root"
+  top_dir="$(find "$extract_root" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+  if [ -z "$top_dir" ]; then
+    echo "failed to unpack release $version" >&2
+    rm -rf "$temp_root"
+    return 1
+  fi
+  mv "$top_dir" "$temp_root/release"
+  printf '%s\n' "$version" > "$temp_root/release/VERSION"
+  rm -rf "$stage_root"
+  mv "$temp_root/release" "$stage_root"
+  rm -rf "$temp_root"
+}
+
+cx_activate_staged_release() {
+  local version stage_root release_root current_link
+  version="$1"
+  stage_root="$(cx_stage_dir)/$version"
+  release_root="$(cx_release_root_dir)/$version"
+  current_link="$(cx_current_link_path)"
+  [ -d "$stage_root" ] || {
+    echo "staged release not found for $version" >&2
+    return 1
+  }
+  mkdir -p "$(cx_release_root_dir)"
+  rm -rf "$release_root"
+  mv "$stage_root" "$release_root"
+  ln -sfn "$release_root" "$current_link"
+}
+
+cx_fetch_and_stage_latest_release() {
+  local metadata version tarball_url release_url checked_at
+  metadata="$(cx_fetch_latest_release_metadata)" || return 1
+  version="$(printf '%s\n' "$metadata" | sed -n 's/^version=//p' | head -n1)"
+  tarball_url="$(printf '%s\n' "$metadata" | sed -n 's/^tarball_url=//p' | head -n1)"
+  release_url="$(printf '%s\n' "$metadata" | sed -n 's/^url=//p' | head -n1)"
+  [ -n "$version" ] || return 1
+  if ! cx_release_exists_locally "$version" && [ ! -d "$(cx_stage_dir)/$version" ]; then
+    cx_stage_release_download "$version" "$tarball_url" || return 1
+  fi
+  checked_at="$(cx_now_epoch)"
+  cx_write_release_state "$(cx_update_state_file)" "$version" "$release_url" "$checked_at"
+  printf '%s\n' "$version"
+}
+
+cx_prompt_yes_no() {
+  local prompt reply default_answer
+  prompt="$1"
+  default_answer="${2:-N}"
+  printf "%s" "$prompt" >&2
+  IFS= read -r reply
+  case "$reply" in
+    "") [ "$default_answer" = "Y" ] && return 0 || return 1 ;;
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+cxupdate() {
+  local target_version
+  cx_command_prelude "cxupdate" 1
+  target_version="$(cx_fetch_and_stage_latest_release)" || {
+    echo "failed to fetch the latest cxhere release metadata" >&2
+    return 1
+  }
+  if [ "$(cx_current_installed_version)" != "$target_version" ]; then
+    cx_activate_staged_release "$target_version" || return 1
+    echo "updated cxhere to $target_version" >&2
+  else
+    echo "cxhere is already at $target_version" >&2
+  fi
+  cx_source_current_release || return 1
+  echo "re-sourced cxhere commands from $(cx_current_link_path)/scripts/codex-worktrees.zsh" >&2
+}
+
 cxhere() {
+  cx_command_prelude "cxhere"
   # Run in a subshell so `set -e` can't terminate the caller's shell.
   # This avoids zsh exiting entirely when a command fails.
   ( set -e
@@ -291,8 +434,7 @@ cxhere() {
   fi
 
   mkdir -p "$worktrees_root"
-  if git -C "$repo_root" worktree list --porcelain | rg -q "^worktree $worktree_dir$"; then
-  else
+  if ! git -C "$repo_root" worktree list --porcelain | rg -q "^worktree $worktree_dir$"; then
     if [ -e "$worktree_dir" ]; then
       echo "worktree directory exists but is not registered: $worktree_dir" >&2
       echo "hint: remove or rename it, or register it with: git worktree add \"$worktree_dir\" \"$branch_name\"" >&2
@@ -704,6 +846,7 @@ cxhere() {
 }
 
 cxclose() {
+  cx_command_prelude "cxclose"
   # Run in a subshell so command failures can't terminate the caller's shell.
   ( set -e
   local repo_root repo_parent repo_name worktrees_root requested_name worktree_dir worktree_slug git_dir git_common_dir
@@ -836,6 +979,7 @@ cxclose() {
 }
 
 cxkill() {
+  cx_command_prelude "cxkill"
   # Run in a subshell so command failures can't terminate the caller's shell.
   ( set -e
   local repo_root repo_parent repo_name worktrees_root branch_name worktree_dir worktree_slug
@@ -919,6 +1063,7 @@ EOF
 }
 
 cxlist() {
+  cx_command_prelude "cxlist"
   set -e
   local repo_root repo_parent repo_name worktrees_root list_output
 
