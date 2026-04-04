@@ -11,10 +11,22 @@ ENV LC_ALL=C.UTF-8
 RUN apt-get update && apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg wget xz-utils \
   && wget -qO /etc/apt/trusted.gpg.d/ngrok.asc \
-    https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+  https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
   && echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" \
-    > /etc/apt/sources.list.d/ngrok.list \
-  && apt-get update && apt-get install -y --no-install-recommends \
+  > /etc/apt/sources.list.d/ngrok.list \
+  && arch="$(dpkg --print-architecture)" \
+  && if [ "$arch" = "amd64" ]; then \
+    curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+    | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg; \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] https://dl.google.com/linux/chrome/deb/ stable main" \
+    > /etc/apt/sources.list.d/google-chrome.list; \
+  fi \
+  && apt-get update \
+  && browser_pkg="" \
+  && if [ "$arch" = "amd64" ]; then \
+    browser_pkg="google-chrome-stable"; \
+  fi \
+  && apt-get install -y --no-install-recommends \
   ffmpeg \
   fonts-freefont-ttf fonts-ipafont-gothic fonts-liberation fonts-noto-color-emoji \
   fonts-tlwg-loma-otf fonts-unifont fonts-wqy-zenhei \
@@ -41,15 +53,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   python3 python3-pip python3-venv \
   r-base r-base-dev \
   ripgrep \
+  ${browser_pkg:+$browser_pkg} \
+  xdotool \
   xauth xfonts-cyrillic xfonts-scalable xvfb \
   && rm -rf /var/lib/apt/lists/*
 
 RUN set -eux; \
   arch="$(dpkg --print-architecture)"; \
   case "$arch" in \
-    amd64) node_arch='x64' ;; \
-    arm64) node_arch='arm64' ;; \
-    *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+  amd64) node_arch='x64' ;; \
+  arm64) node_arch='arm64' ;; \
+  *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
   esac; \
   curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz"; \
   curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \

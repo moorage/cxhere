@@ -58,6 +58,9 @@ cx_build_image_container() {
   if [ -n "${CX_BUILD_MEMORY:-}" ]; then
     build_args+=(--memory "$CX_BUILD_MEMORY")
   fi
+  if [ -n "${CX_BUILD_PLATFORM:-}" ]; then
+    build_args+=(--platform "$CX_BUILD_PLATFORM")
+  fi
   build_args+=("$ROOT_DIR")
   container "${build_args[@]}"
 }

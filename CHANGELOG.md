@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-03
+- Added `xdotool` to the image and made browser installation architecture-aware so `google-chrome-stable` is installed only on `amd64` builds while native `arm64` builds skip a system browser.
+- Added `CX_BUILD_PLATFORM` to Apple `container` builds plus `CXHERE_CONTAINER_PLATFORM` and `CXHERE_CONTAINER_ROSETTA` to Apple `container` sessions, so Apple silicon hosts can build and run `linux/amd64` images when Chrome is required.
+- Updated `README.md` to document the new platform flags and clarify that Google Chrome is only included on `amd64` builds.
+
 ## 2026-03-27
 - Fixed `cxkill`'s timeout helper to run Apple `container` CLI calls in their own session and kill the whole process group on timeout, so wedged helper subprocesses do not survive and keep the shutdown fallback loop stuck.
 - Added a last-resort Apple `container` fallback that kills the per-container launchd runtime job when `container stop`, `container kill`, and `container delete --force` all wedge on the same session.

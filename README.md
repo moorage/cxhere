@@ -41,6 +41,7 @@ CX_BUILD_RUNTIME=all ./scripts/build-local.sh
 | `CX_BUILD_RUNTIME` | `auto` | `./scripts/build-local.sh` | Selects `container`, `docker`, or `all`. `auto` prefers a ready Apple runtime, then a ready Docker daemon. |
 | `CX_BUILD_CPUS` | unset | Apple `container` builds | Passed through as `container build --cpus`. |
 | `CX_BUILD_MEMORY` | unset | Apple `container` builds | Passed through as `container build --memory`. |
+| `CX_BUILD_PLATFORM` | unset | Apple `container` builds | Passed through as `container build --platform`. Use `linux/amd64` when you need Google Chrome on Apple silicon. |
 
 ## Shell Setup
 
@@ -114,6 +115,8 @@ With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete kn
 | --- | --- | --- | --- |
 | `CXHERE_CONTAINER_CPUS` | `4` | Apple `container` sessions | Sets the VM CPU allocation. |
 | `CXHERE_CONTAINER_MEMORY` | `4G` | Apple `container` sessions | Sets the VM memory allocation. |
+| `CXHERE_CONTAINER_PLATFORM` | unset | Apple `container` sessions | Passed through as `container run --platform`. Set `linux/amd64` to match an amd64 image build. |
+| `CXHERE_CONTAINER_ROSETTA` | auto for `linux/amd64` | Apple `container` sessions | When true, adds `container run --rosetta`. Auto-enabled when `CXHERE_CONTAINER_PLATFORM=linux/amd64`. |
 | `CXHERE_CONTAINER_XVFB_SCREEN` | `1280x720x24` | Apple `container` sessions | Default headed display size when `XVFB_SCREEN` is not set. |
 | `CXHERE_CONTAINER_REPO_ROOT_MODE` | `rw` | Apple `container` sessions | Mount mode for the host repo root at its absolute path. Leave this at `rw` for Git worktree compatibility. |
 | `XVFB_SCREEN` | runtime-specific | Containerized sessions | Overrides the display size directly for one run. Docker defaults to `1920x1080x24`; Apple `container` defaults to `1280x720x24`. |
@@ -163,7 +166,7 @@ With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete kn
 
 - Base image: `ubuntu:25.10`
 - Node.js: `25.8.1`
-- Included tooling: Playwright Linux dependencies, `xvfb`, PulseAudio, `ffmpeg`, `ngrok`, and R
+- Included tooling: Playwright Linux dependencies, `xvfb`, PulseAudio, `ffmpeg`, `xdotool`, `ngrok`, and R. Google Chrome is included on `amd64` builds only.
 - Browser cache path: `PLAYWRIGHT_BROWSERS_PATH=/workspace/.pw-browsers`
 - Entry point behavior: starts PulseAudio with a null sink, exposes the monitor source for ffmpeg audio capture, starts Xvfb, then execs `codex`
 

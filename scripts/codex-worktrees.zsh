@@ -630,8 +630,20 @@ cxhere() {
     container_memory="${CXHERE_CONTAINER_MEMORY:-4G}"
     container_xvfb_screen="${CXHERE_CONTAINER_XVFB_SCREEN:-1280x720x24}"
     container_repo_root_mount_mode="${CXHERE_CONTAINER_REPO_ROOT_MODE:-rw}"
+    container_platform="${CXHERE_CONTAINER_PLATFORM:-}"
+    container_rosetta="${CXHERE_CONTAINER_ROSETTA:-}"
+    container_platform_args=()
     if [ "$use_ssh_agent" -eq 1 ] && [ -n "$ssh_agent_sock" ] && [ -S "$ssh_agent_sock" ]; then
       container_ssh_agent_arg=(--ssh)
+    fi
+    if [ -n "$container_platform" ]; then
+      container_platform_args+=(--platform "$container_platform")
+      if [ -z "$container_rosetta" ] && [ "$container_platform" = "linux/amd64" ]; then
+        container_rosetta=1
+      fi
+    fi
+    if cx_bool_is_true "$container_rosetta"; then
+      container_platform_args+=(--rosetta)
     fi
 
     container run --remove --interactive --tty \
@@ -640,6 +652,7 @@ cxhere() {
       "${runtime_label_args[@]}" \
       --cpus "$container_cpus" \
       --memory "$container_memory" \
+      "${container_platform_args[@]}" \
       --read-only \
       --tmpfs /tmp \
       --tmpfs /home/codex \
