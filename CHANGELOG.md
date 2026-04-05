@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-05
+- Fixed shell compatibility in the launcher by switching version comparison helpers to `[[ ... > ... ]]` / `[[ ... < ... ]]`, which avoids `zsh` parse errors during `cxhere`, `cxkill`, and related commands.
+- Fixed the `bash` `nullglob` restore path in `cxhere` so `set -e` shells no longer exit early when `nullglob` starts unset.
+- Added regression tests covering version comparison behavior in both `bash` and `zsh`, plus the `bash` `nullglob` restore flow.
+
 ## 2026-04-03
 - Added `cxharness`, which downloads the live `moorage/new-codex-project-harness` repo into the current directory after confirmation, creates any missing directories, and prompts before overwriting existing files.
 - Added a standalone `install.sh` bootstrapper for `~/.cxhere` installs that checks Apple `container` release freshness on macOS 26+, installs the latest `cxhere` GitHub release under `~/.cxhere/current`, offers to wire the shell RC file, and builds `codex-cli:local` when needed.

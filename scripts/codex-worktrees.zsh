@@ -575,7 +575,11 @@ cxhere() {
     setopt local_options null_glob
   elif [ -n "${BASH_VERSION-}" ]; then
     local _nullglob_restore
-    _nullglob_restore="$(shopt -p nullglob)"
+    if shopt -q nullglob; then
+      _nullglob_restore='shopt -s nullglob'
+    else
+      _nullglob_restore='shopt -u nullglob'
+    fi
     shopt -s nullglob
   fi
   env_sources=("$repo_root"/.env*)

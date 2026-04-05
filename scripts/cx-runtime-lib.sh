@@ -50,11 +50,11 @@ EOF
 }
 
 cx_version_gt() {
-  [ "$(cx_version_sort_key "$1")" \> "$(cx_version_sort_key "$2")" ]
+  [[ "$(cx_version_sort_key "$1")" > "$(cx_version_sort_key "$2")" ]]
 }
 
 cx_version_lt() {
-  [ "$(cx_version_sort_key "$1")" \< "$(cx_version_sort_key "$2")" ]
+  [[ "$(cx_version_sort_key "$1")" < "$(cx_version_sort_key "$2")" ]]
 }
 
 cx_curl_get() {

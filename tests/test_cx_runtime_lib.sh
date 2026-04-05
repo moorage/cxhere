@@ -53,6 +53,18 @@ fi
 
 echo "cx_run_with_timeout kills timed out process groups"
 
+if ! bash -lc "source '$repo_root/scripts/cx-runtime-lib.sh' && cx_version_gt 0.1.1 0.1.0 && ! cx_version_gt 0.1.0 0.1.1 && cx_version_lt 0.1.0 0.1.1 && ! cx_version_lt 0.1.1 0.1.0"; then
+  echo "expected version comparisons to work under bash" >&2
+  exit 1
+fi
+
+if ! zsh -lc "source '$repo_root/scripts/cx-runtime-lib.sh' && cx_version_gt 0.1.1 0.1.0 && ! cx_version_gt 0.1.0 0.1.1 && cx_version_lt 0.1.0 0.1.1 && ! cx_version_lt 0.1.1 0.1.0"; then
+  echo "expected version comparisons to work under zsh" >&2
+  exit 1
+fi
+
+echo "cx_version_gt/cx_version_lt compare versions under bash and zsh"
+
 launchctl_calls_file="$tmpdir/launchctl.calls"
 container_list_file="$tmpdir/container.list"
 printf 'stuck-id\n' > "$container_list_file"
