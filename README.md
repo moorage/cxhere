@@ -189,7 +189,7 @@ With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete kn
 - Docker sessions also mount the main repo path read-only and `<repo>/.git` read-write so git worktree metadata still works.
 - Apple `container` sessions instead mount the full main repo path read-write at its host absolute path so Git worktree metadata resolves without relying on nested bind mounts.
 - Docker sessions forward the host ssh-agent by bind-mounting the socket. Apple `container` sessions use the runtime's native `--ssh` forwarding instead.
-- `~/.gitconfig` and `~/.codex` are mounted into containerized sessions by default.
+- `~/.gitconfig` is exported into a session-local readable copy for containerized sessions, and `~/.codex` is mounted into the session by default.
 - Root-level `.env*` files from the main repo are copied into the worktree when it is created. If present, `.env.cx.local` is passed to the session as an env file.
 - `cxhere` offers to create `docs/PLANS.md` from the project template when it is missing.
 - `cxhere` offers to create `$CODEX_HOME/AGENTS.md` from the global template when it is missing.

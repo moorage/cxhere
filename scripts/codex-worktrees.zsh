@@ -272,6 +272,9 @@ cxhere() {
   local gh_config_dir use_gh gh_token
   local -a gh_config_arg
   local -a gh_token_arg
+  local host_gitconfig staged_gitconfig_dir staged_gitconfig_path
+  local -a git_config_mount_arg
+  local -a git_config_env_arg
   local ssh_dir use_ssh
   local -a ssh_dir_arg
   local -a container_gh_config_arg
@@ -341,6 +344,11 @@ cxhere() {
   gh_token=""
   gh_config_arg=()
   gh_token_arg=()
+  host_gitconfig="$HOME/.gitconfig"
+  staged_gitconfig_dir=""
+  staged_gitconfig_path=""
+  git_config_mount_arg=()
+  git_config_env_arg=()
   use_ssh=1
   ssh_dir="$HOME/.ssh"
   ssh_dir_arg=()
@@ -416,6 +424,19 @@ cxhere() {
   if [ "$local_mode" -eq 0 ]; then
     cx_require_runtime "$runtime"
     cx_require_local_image "$runtime" "$image_name"
+
+    if [ -f "$host_gitconfig" ]; then
+      staged_gitconfig_dir="$(mktemp -d "${TMPDIR:-/tmp}/cxhere-gitconfig.XXXXXX")" || return 1
+      trap 'rm -rf "$staged_gitconfig_dir"' EXIT INT TERM
+      staged_gitconfig_path="$staged_gitconfig_dir/.gitconfig"
+      if ! cx_write_flat_global_gitconfig "$host_gitconfig" "$staged_gitconfig_path" "$HOME"; then
+        echo "warning: failed to flatten host git config from $host_gitconfig; using a direct copy instead" >&2
+        cp "$host_gitconfig" "$staged_gitconfig_path" || return 1
+        chmod 0644 "$staged_gitconfig_path" || true
+      fi
+      git_config_mount_arg=(--volume "$staged_gitconfig_path:/tmp/pulse-home/.gitconfig:ro")
+      git_config_env_arg=(--env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig)
+    fi
   fi
 
   codex_workspace_trust_present() {
@@ -815,7 +836,7 @@ cxhere() {
       --volume "$worktree_dir:/workspace:rw" \
       --volume "$repo_root_mount:$repo_root_mount:ro" \
       --volume "$repo_git_mount:$repo_git_mount:rw" \
-      --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
+      "${git_config_mount_arg[@]}" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
       "${gh_config_arg[@]}" \
       "${gh_token_arg[@]}" \
@@ -825,7 +846,7 @@ cxhere() {
       "${env_file_arg[@]}" \
       --env CODEX_HOME=/home/codex/.codex \
       --env GH_CONFIG_DIR=/home/codex/.config/gh \
-      --env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig \
+      "${git_config_env_arg[@]}" \
       --env NPM_CONFIG_CACHE=/home/codex/.npm \
       --env TMPDIR=/tmp \
       --env HOME=/tmp/pulse-home \
@@ -884,7 +905,7 @@ cxhere() {
       --tmpfs /home/codex \
       --volume "$worktree_dir:/workspace:rw" \
       --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
-      --volume "$HOME/.gitconfig:/tmp/pulse-home/.gitconfig:ro" \
+      "${git_config_mount_arg[@]}" \
       --volume "$HOME/.codex:/home/codex/.codex:rw" \
       "${container_gh_config_arg[@]}" \
       "${container_gh_bootstrap_arg[@]}" \
@@ -895,7 +916,7 @@ cxhere() {
       --env CODEX_HOME=/home/codex/.codex \
       --env GH_CONFIG_DIR=/tmp/pulse-home/.config/gh \
       --env "CXHERE_GH_HOST_CONFIG_DIR=$gh_host_mount_target" \
-      --env GIT_CONFIG_GLOBAL=/tmp/pulse-home/.gitconfig \
+      "${git_config_env_arg[@]}" \
       --env NPM_CONFIG_CACHE=/tmp/npm-cache \
       --env TMPDIR=/tmp \
       --env HOME=/tmp/pulse-home \

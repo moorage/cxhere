@@ -50,11 +50,11 @@ EOF
 }
 
 cx_version_gt() {
-  [[ "$(cx_version_sort_key "$1")" > "$(cx_version_sort_key "$2")" ]]
+  [ "$(cx_version_sort_key "$1")" -gt "$(cx_version_sort_key "$2")" ]
 }
 
 cx_version_lt() {
-  [[ "$(cx_version_sort_key "$1")" < "$(cx_version_sort_key "$2")" ]]
+  [ "$(cx_version_sort_key "$1")" -lt "$(cx_version_sort_key "$2")" ]
 }
 
 cx_curl_get() {
@@ -287,6 +287,33 @@ cx_sha256_value() {
     echo "no SHA-256 tool available (expected shasum, sha256sum, or openssl)" >&2
     return 1
   fi
+}
+
+cx_write_flat_global_gitconfig() {
+  local source_file dest_file source_home line key value
+  source_file="$1"
+  dest_file="$2"
+  source_home="${3:-$HOME}"
+
+  [ -f "$source_file" ] || return 1
+  mkdir -p "$(dirname "$dest_file")" || return 1
+  : > "$dest_file" || return 1
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    case "$key" in
+      include.path|includeIf.*.path)
+        continue
+        ;;
+    esac
+    git config --file "$dest_file" --add "$key" "$value" || return 1
+  done <<EOF
+$(HOME="$source_home" GIT_CONFIG_GLOBAL="$source_file" git config --global --includes --list)
+EOF
+
+  chmod 0644 "$dest_file" || true
 }
 
 cx_host_macos_major_version() {

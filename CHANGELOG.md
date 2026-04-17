@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-17
+- Fixed containerized Git startup by exporting the host global Git config into a session-local readable file before launch, so Apple `container` Codex sessions can read `user.name`, `user.email`, aliases, and other global config even when the host `~/.gitconfig` is `0600`.
+- Changed the version comparison helpers to numeric `test` operators so `cxhere` update checks no longer depend on `[[ ... > ... ]]` parsing quirks in caller shells.
+- Added shell regressions covering flattened Git config export, including values from relative include files while omitting `include.path` directives from the staged copy.
+
 ## 2026-04-05
 - Fixed shell compatibility in the launcher by switching version comparison helpers to `[[ ... > ... ]]` / `[[ ... < ... ]]`, which avoids `zsh` parse errors during `cxhere`, `cxkill`, and related commands.
 - Fixed the `bash` `nullglob` restore path in `cxhere` so `set -e` shells no longer exit early when `nullglob` starts unset.

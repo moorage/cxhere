@@ -65,6 +65,49 @@ fi
 
 echo "cx_version_gt/cx_version_lt compare versions under bash and zsh"
 
+gitconfig_home="$tmpdir/git-home"
+mkdir -p "$gitconfig_home"
+cat > "$gitconfig_home/.gitconfig" <<'EOF'
+[user]
+  name = Test User
+[include]
+  path = .gitconfig.local
+EOF
+cat > "$gitconfig_home/.gitconfig.local" <<'EOF'
+[user]
+  email = test@example.com
+[alias]
+  co = checkout
+EOF
+
+flattened_gitconfig="$tmpdir/flattened/.gitconfig"
+if ! cx_write_flat_global_gitconfig "$gitconfig_home/.gitconfig" "$flattened_gitconfig" "$gitconfig_home"; then
+  echo "expected cx_write_flat_global_gitconfig to export the host git config" >&2
+  exit 1
+fi
+
+if [ "$(git config --file "$flattened_gitconfig" user.name)" != "Test User" ]; then
+  echo "expected flattened git config to preserve user.name" >&2
+  exit 1
+fi
+
+if [ "$(git config --file "$flattened_gitconfig" user.email)" != "test@example.com" ]; then
+  echo "expected flattened git config to include values from included files" >&2
+  exit 1
+fi
+
+if [ "$(git config --file "$flattened_gitconfig" alias.co)" != "checkout" ]; then
+  echo "expected flattened git config to preserve aliases from included files" >&2
+  exit 1
+fi
+
+if rg -n '^include(\.|If\.)' "$flattened_gitconfig" >/dev/null; then
+  echo "expected flattened git config to omit include directives" >&2
+  exit 1
+fi
+
+echo "cx_write_flat_global_gitconfig exports an include-free global config"
+
 launchctl_calls_file="$tmpdir/launchctl.calls"
 container_list_file="$tmpdir/container.list"
 printf 'stuck-id\n' > "$container_list_file"
