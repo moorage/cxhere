@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-04-17
+- Added a cached Apple `container` freshness check to the normal `cxhere` command prelude on supported Apple silicon Macs, so `cxhere`, `cxkill`, `cxlist`, `cxclose`, `cxupdate`, and `cxharness` now warn when the host runtime is missing or behind without prompting interactively.
+- Added shell coverage for the Apple `container` runtime notice path, including both outdated and missing-install scenarios.
 - Fixed containerized Git startup by exporting the host global Git config into a session-local readable file before launch, so Apple `container` Codex sessions can read `user.name`, `user.email`, aliases, and other global config even when the host `~/.gitconfig` is `0600`.
 - Changed the version comparison helpers to numeric `test` operators so `cxhere` update checks no longer depend on `[[ ... > ... ]]` parsing quirks in caller shells.
 - Added shell regressions covering flattened Git config export, including values from relative include files while omitting `include.path` directives from the staged copy.

@@ -109,8 +109,16 @@ cx_update_state_file() {
   printf '%s\n' "$(cx_state_dir)/latest-release"
 }
 
+cx_apple_container_update_state_file() {
+  printf '%s\n' "$(cx_state_dir)/latest-apple-container-release"
+}
+
 cx_update_lock_dir() {
   printf '%s\n' "$(cx_state_dir)/update-check.lock"
+}
+
+cx_apple_container_update_lock_dir() {
+  printf '%s\n' "$(cx_state_dir)/apple-container-update-check.lock"
 }
 
 cx_loaded_version() {
@@ -172,9 +180,36 @@ cx_now_epoch() {
   date +%s
 }
 
+cx_apple_container_host_supported() {
+  [ "$(uname -s 2>/dev/null)" = "Darwin" ] || return 1
+  [ "$(uname -m 2>/dev/null)" = "arm64" ] || return 1
+  [ "$(cx_host_macos_major_version)" -ge 26 ] || return 1
+}
+
 cx_update_state_is_fresh() {
   local checked_at now age
   checked_at="$(cx_update_state_checked_at)"
+  [ -n "$checked_at" ] || return 1
+  now="$(cx_now_epoch)"
+  age=$((now - checked_at))
+  [ "$age" -lt "$CXHERE_UPDATE_CACHE_TTL_SECONDS" ]
+}
+
+cx_apple_container_update_state_latest_version() {
+  cx_read_release_state_value "$(cx_apple_container_update_state_file)" latest_version 2>/dev/null || true
+}
+
+cx_apple_container_update_state_release_url() {
+  cx_read_release_state_value "$(cx_apple_container_update_state_file)" release_url 2>/dev/null || true
+}
+
+cx_apple_container_update_state_checked_at() {
+  cx_read_release_state_value "$(cx_apple_container_update_state_file)" checked_at 2>/dev/null || true
+}
+
+cx_apple_container_update_state_is_fresh() {
+  local checked_at now age
+  checked_at="$(cx_apple_container_update_state_checked_at)"
   [ -n "$checked_at" ] || return 1
   now="$(cx_now_epoch)"
   age=$((now - checked_at))
@@ -190,6 +225,23 @@ cx_fetch_latest_release_metadata() {
   [ -n "$latest_version" ] || return 1
   [ -n "$release_url" ] || release_url="$(cx_release_page_url)"
   printf 'version=%s\nurl=%s\ntarball_url=%s\n' "$latest_version" "$release_url" "$tarball_url"
+}
+
+cx_fetch_latest_apple_container_release_metadata() {
+  local release_json latest_version release_url
+  release_json="$(cx_curl_get "$CXHERE_DEFAULT_APPLE_CONTAINER_RELEASES_API")" || return 1
+  latest_version="$(cx_extract_release_tag_from_json "$release_json")"
+  release_url="$(cx_extract_release_url_from_json "$release_json")"
+  [ -n "$latest_version" ] || return 1
+  [ -n "$release_url" ] || release_url="$CXHERE_DEFAULT_APPLE_CONTAINER_RELEASES_PAGE"
+  printf 'version=%s\nurl=%s\n' "$latest_version" "$release_url"
+}
+
+cx_installed_apple_container_version() {
+  if ! command -v container >/dev/null 2>&1; then
+    return 1
+  fi
+  container --version 2>/dev/null | sed -n 's/.*version //p' | head -n1
 }
 
 cx_background_update_check() {
@@ -208,12 +260,39 @@ cx_background_update_check() {
   cx_write_release_state "$(cx_update_state_file)" "$latest_version" "$release_url" "$checked_at"
 }
 
+cx_background_apple_container_update_check() {
+  local lock_dir metadata latest_version release_url checked_at
+  cx_apple_container_host_supported || return 0
+  lock_dir="$(cx_apple_container_update_lock_dir)"
+  mkdir -p "$(cx_state_dir)"
+  if ! mkdir "$lock_dir" 2>/dev/null; then
+    return 0
+  fi
+  trap 'rmdir "$lock_dir" >/dev/null 2>&1 || true' EXIT INT TERM
+  metadata="$(cx_fetch_latest_apple_container_release_metadata 2>/dev/null)" || return 0
+  latest_version="$(printf '%s\n' "$metadata" | sed -n 's/^version=//p' | head -n1)"
+  release_url="$(printf '%s\n' "$metadata" | sed -n 's/^url=//p' | head -n1)"
+  checked_at="$(cx_now_epoch)"
+  [ -n "$latest_version" ] || return 0
+  cx_write_release_state "$(cx_apple_container_update_state_file)" "$latest_version" "$release_url" "$checked_at"
+}
+
 cx_kickoff_background_update_check() {
   if cx_update_state_is_fresh; then
     return 0
   fi
   (
     cx_background_update_check
+  ) >/dev/null 2>&1 &
+}
+
+cx_kickoff_background_apple_container_update_check() {
+  cx_apple_container_host_supported || return 0
+  if cx_apple_container_update_state_is_fresh; then
+    return 0
+  fi
+  (
+    cx_background_apple_container_update_check
   ) >/dev/null 2>&1 &
 }
 
@@ -230,6 +309,36 @@ cx_print_update_notice_if_needed() {
   echo "run: cxupdate" >&2
   if [ -n "$release_url" ]; then
     echo "release notes: $release_url" >&2
+  fi
+}
+
+cx_print_apple_container_update_notice_if_needed() {
+  local latest_version release_url installed_version warning_key
+  cx_apple_container_host_supported || return 0
+  latest_version="$(cx_apple_container_update_state_latest_version)"
+  [ -n "$latest_version" ] || return 0
+  release_url="$(cx_apple_container_update_state_release_url)"
+  installed_version="$(cx_installed_apple_container_version || true)"
+  if [ -n "$installed_version" ] && ! cx_version_lt "$installed_version" "$latest_version"; then
+    return 0
+  fi
+  if [ -n "$installed_version" ]; then
+    warning_key="update:$installed_version:$latest_version"
+  else
+    warning_key="missing:$latest_version"
+  fi
+  if [ "${CXHERE_APPLE_CONTAINER_WARNED_STATE:-}" = "$warning_key" ]; then
+    return 0
+  fi
+  CXHERE_APPLE_CONTAINER_WARNED_STATE="$warning_key"
+  export CXHERE_APPLE_CONTAINER_WARNED_STATE
+  if [ -n "$installed_version" ]; then
+    echo "Apple container update available: $installed_version -> $latest_version" >&2
+  else
+    echo "Apple container is not installed. Latest release: $latest_version" >&2
+  fi
+  if [ -n "$release_url" ]; then
+    echo "install/update: $release_url" >&2
   fi
 }
 
@@ -254,8 +363,10 @@ cx_command_prelude() {
   skip_update_check="${2:-0}"
   cx_warn_if_stale_shell_source
   cx_print_update_notice_if_needed
+  cx_print_apple_container_update_notice_if_needed
   if [ "$skip_update_check" != "1" ]; then
     cx_kickoff_background_update_check
+    cx_kickoff_background_apple_container_update_check
   fi
   : "$command_name"
 }

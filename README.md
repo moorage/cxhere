@@ -126,6 +126,7 @@ With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete kn
 - Every `cxhere`, `cxclose`, `cxkill`, `cxlist`, `cxupdate`, and `cxharness` invocation kicks off a non-blocking release check in the background.
 - The latest discovered release is cached under `~/.cxhere/state/latest-release`.
 - When the cached version is newer than the sourced version, commands print an update notice and tell the user to run `cxupdate`.
+- On supported Apple silicon Macs, the same command prelude also caches the latest `apple/container` release under `~/.cxhere/state/latest-apple-container-release` and prints a non-interactive notice when the host runtime is missing or behind.
 - If the shell still has an older sourced copy after `~/.cxhere/current` moved forward, commands warn once and print the `source "$HOME/.cxhere/current/scripts/codex-worktrees.zsh"` fixup command.
 
 ## Session Flags

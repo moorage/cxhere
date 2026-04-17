@@ -108,6 +108,83 @@ fi
 
 echo "cx_write_flat_global_gitconfig exports an include-free global config"
 
+apple_state_home="$tmpdir/apple-state-home"
+mkdir -p "$apple_state_home/.cxhere/state"
+cat > "$apple_state_home/.cxhere/state/latest-apple-container-release" <<'EOF'
+latest_version=0.10.0
+release_url=https://github.com/apple/container/releases/tag/0.10.0
+checked_at=123
+EOF
+
+apple_notice_output="$(
+  HOME="$apple_state_home" bash -lc '
+    source "'"$repo_root"'/scripts/cx-runtime-lib.sh"
+    uname() {
+      case "$1" in
+        -s) printf "Darwin\n" ;;
+        -m) printf "arm64\n" ;;
+        *) command uname "$@" ;;
+      esac
+    }
+    sw_vers() {
+      if [ "${1:-}" = "-productVersion" ]; then
+        printf "26.1\n"
+      else
+        command sw_vers "$@"
+      fi
+    }
+    container() {
+      if [ "${1:-}" = "--version" ]; then
+        printf "container CLI version 0.9.0\n"
+        return 0
+      fi
+      return 1
+    }
+    cx_print_apple_container_update_notice_if_needed 2>&1
+  '
+)"
+if ! printf '%s\n' "$apple_notice_output" | rg -F "Apple container update available: 0.9.0 -> 0.10.0" >/dev/null; then
+  echo "expected Apple container update notice for outdated installs" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$apple_notice_output" | rg -F "install/update: https://github.com/apple/container/releases/tag/0.10.0" >/dev/null; then
+  echo "expected Apple container update notice to include the release URL" >&2
+  exit 1
+fi
+
+apple_missing_output="$(
+  HOME="$apple_state_home" bash -lc '
+    source "'"$repo_root"'/scripts/cx-runtime-lib.sh"
+    uname() {
+      case "$1" in
+        -s) printf "Darwin\n" ;;
+        -m) printf "arm64\n" ;;
+        *) command uname "$@" ;;
+      esac
+    }
+    sw_vers() {
+      if [ "${1:-}" = "-productVersion" ]; then
+        printf "26.1\n"
+      else
+        command sw_vers "$@"
+      fi
+    }
+    command() {
+      if [ "${1:-}" = "-v" ] && [ "${2:-}" = "container" ]; then
+        return 1
+      fi
+      builtin command "$@"
+    }
+    cx_print_apple_container_update_notice_if_needed 2>&1
+  '
+)"
+if ! printf '%s\n' "$apple_missing_output" | rg -F "Apple container is not installed. Latest release: 0.10.0" >/dev/null; then
+  echo "expected Apple container install notice on supported hosts without container" >&2
+  exit 1
+fi
+
+echo "cx_print_apple_container_update_notice_if_needed warns for outdated or missing Apple container installs"
+
 launchctl_calls_file="$tmpdir/launchctl.calls"
 container_list_file="$tmpdir/container.list"
 printf 'stuck-id\n' > "$container_list_file"
