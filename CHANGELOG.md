@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-18
+- Pruned stale codex-managed Git worktree registrations before `cxlist`, `cxclose`, completion lookup, and `cxhere` reuse checks, so deleted worktree directories no longer linger in completions or block recreation until a manual `git worktree prune`.
+- Fixed `cxclose` to recover cleanly when a selected managed worktree path is already gone on disk, pruning stale metadata and returning a clear not-found message instead of surfacing a downstream Git `cannot change to` fatal.
+- Hardened the one-argument `cxhere` launch path for strict `bash` shells by avoiding unbound `$2` and empty-array expansion failures under `set -u`.
+- Added shell regressions covering stale managed worktree pruning across completion, `cxlist`, `cxclose`, and `cxhere` recreation in local mode.
+
 ## 2026-04-17
 - Added a cached Apple `container` freshness check to the normal `cxhere` command prelude on supported Apple silicon Macs, so `cxhere`, `cxkill`, `cxlist`, `cxclose`, `cxupdate`, and `cxharness` now warn when the host runtime is missing or behind without prompting interactively.
 - Added shell coverage for the Apple `container` runtime notice path, including both outdated and missing-install scenarios.

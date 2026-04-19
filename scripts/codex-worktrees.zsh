@@ -316,7 +316,7 @@ cxhere() {
 
   repo_root="$(git rev-parse --show-toplevel)"
   branch_name="$1"
-  session_id="$2"
+  session_id="${2-}"
   worktree_slug="${branch_name//\//__}"
   repo_parent="$(dirname "$repo_root")"
   repo_name="$(basename "$repo_root")"
@@ -538,6 +538,7 @@ cxhere() {
   fi
 
   mkdir -p "$worktrees_root"
+  cx_prune_codex_worktrees "$repo_root" "$worktrees_root"
   if ! git -C "$repo_root" worktree list --porcelain | rg -q "^worktree $worktree_dir$"; then
     if [ -e "$worktree_dir" ]; then
       echo "worktree directory exists but is not registered: $worktree_dir" >&2
@@ -822,50 +823,96 @@ cxhere() {
       docker_security_opts+=(--security-opt "seccomp=$seccomp_profile")
     fi
 
-    docker run --rm -it \
-      --init \
-      --ipc=host \
-      --user codex \
-      --cap-drop=ALL \
-      "${runtime_label_args[@]}" \
-      "${docker_security_opts[@]}" \
-      "${docker_resource_opts[@]}" \
-      --read-only \
-      --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=${tmpfs_tmp_size}" \
-      --tmpfs "/home/codex:rw,noexec,nosuid,nodev,size=${tmpfs_home_size},uid=10001,gid=10001" \
-      --volume "$worktree_dir:/workspace:rw" \
-      --volume "$repo_root_mount:$repo_root_mount:ro" \
-      --volume "$repo_git_mount:$repo_git_mount:rw" \
-      "${git_config_mount_arg[@]}" \
-      --volume "$HOME/.codex:/home/codex/.codex:rw" \
-      "${gh_config_arg[@]}" \
-      "${gh_token_arg[@]}" \
-      "${ssh_dir_arg[@]}" \
-      "${ssh_agent_arg[@]}" \
-      "${ngrok_config_arg[@]}" \
-      "${env_file_arg[@]}" \
-      --env CODEX_HOME=/home/codex/.codex \
-      --env GH_CONFIG_DIR=/home/codex/.config/gh \
-      "${git_config_env_arg[@]}" \
-      --env NPM_CONFIG_CACHE=/home/codex/.npm \
-      --env TMPDIR=/tmp \
-      --env HOME=/tmp/pulse-home \
-      --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
-      --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
-      --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
-      --env "DISPLAY=${DISPLAY:-:99}" \
-      --env "XVFB_SCREEN=${XVFB_SCREEN:-1920x1080x24}" \
-      --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
-      --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
-      --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
-      "${ssh_agent_env_arg[@]}" \
-      --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
-      --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
-      --workdir /workspace \
-      "$image_name" \
-      "${codex_args[@]}" \
-      --dangerously-bypass-approvals-and-sandbox \
-      --search
+    if [ "${#codex_args[@]}" -gt 0 ]; then
+      docker run --rm -it \
+        --init \
+        --ipc=host \
+        --user codex \
+        --cap-drop=ALL \
+        "${runtime_label_args[@]}" \
+        "${docker_security_opts[@]}" \
+        "${docker_resource_opts[@]}" \
+        --read-only \
+        --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=${tmpfs_tmp_size}" \
+        --tmpfs "/home/codex:rw,noexec,nosuid,nodev,size=${tmpfs_home_size},uid=10001,gid=10001" \
+        --volume "$worktree_dir:/workspace:rw" \
+        --volume "$repo_root_mount:$repo_root_mount:ro" \
+        --volume "$repo_git_mount:$repo_git_mount:rw" \
+        "${git_config_mount_arg[@]}" \
+        --volume "$HOME/.codex:/home/codex/.codex:rw" \
+        "${gh_config_arg[@]}" \
+        "${gh_token_arg[@]}" \
+        "${ssh_dir_arg[@]}" \
+        "${ssh_agent_arg[@]}" \
+        "${ngrok_config_arg[@]}" \
+        "${env_file_arg[@]}" \
+        --env CODEX_HOME=/home/codex/.codex \
+        --env GH_CONFIG_DIR=/home/codex/.config/gh \
+        "${git_config_env_arg[@]}" \
+        --env NPM_CONFIG_CACHE=/home/codex/.npm \
+        --env TMPDIR=/tmp \
+        --env HOME=/tmp/pulse-home \
+        --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
+        --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
+        --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
+        --env "DISPLAY=${DISPLAY:-:99}" \
+        --env "XVFB_SCREEN=${XVFB_SCREEN:-1920x1080x24}" \
+        --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
+        --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
+        --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+        "${ssh_agent_env_arg[@]}" \
+        --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
+        --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
+        --workdir /workspace \
+        "$image_name" \
+        "${codex_args[@]}" \
+        --dangerously-bypass-approvals-and-sandbox \
+        --search
+    else
+      docker run --rm -it \
+        --init \
+        --ipc=host \
+        --user codex \
+        --cap-drop=ALL \
+        "${runtime_label_args[@]}" \
+        "${docker_security_opts[@]}" \
+        "${docker_resource_opts[@]}" \
+        --read-only \
+        --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=${tmpfs_tmp_size}" \
+        --tmpfs "/home/codex:rw,noexec,nosuid,nodev,size=${tmpfs_home_size},uid=10001,gid=10001" \
+        --volume "$worktree_dir:/workspace:rw" \
+        --volume "$repo_root_mount:$repo_root_mount:ro" \
+        --volume "$repo_git_mount:$repo_git_mount:rw" \
+        "${git_config_mount_arg[@]}" \
+        --volume "$HOME/.codex:/home/codex/.codex:rw" \
+        "${gh_config_arg[@]}" \
+        "${gh_token_arg[@]}" \
+        "${ssh_dir_arg[@]}" \
+        "${ssh_agent_arg[@]}" \
+        "${ngrok_config_arg[@]}" \
+        "${env_file_arg[@]}" \
+        --env CODEX_HOME=/home/codex/.codex \
+        --env GH_CONFIG_DIR=/home/codex/.config/gh \
+        "${git_config_env_arg[@]}" \
+        --env NPM_CONFIG_CACHE=/home/codex/.npm \
+        --env TMPDIR=/tmp \
+        --env HOME=/tmp/pulse-home \
+        --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
+        --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
+        --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
+        --env "DISPLAY=${DISPLAY:-:99}" \
+        --env "XVFB_SCREEN=${XVFB_SCREEN:-1920x1080x24}" \
+        --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
+        --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
+        --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+        "${ssh_agent_env_arg[@]}" \
+        --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
+        --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
+        --workdir /workspace \
+        "$image_name" \
+        --dangerously-bypass-approvals-and-sandbox \
+        --search
+    fi
   elif [ "$runtime" = "container" ]; then
     # Apple's runtime launches each container in its own VM, so start with a lighter
     # default display size and explicit VM resources. Users can still override both.
@@ -893,48 +940,92 @@ cxhere() {
       container_platform_args+=(--rosetta)
     fi
 
-    container run --remove --interactive --tty \
-      --init \
-      --user codex \
-      "${runtime_label_args[@]}" \
-      --cpus "$container_cpus" \
-      --memory "$container_memory" \
-      "${container_platform_args[@]}" \
-      --read-only \
-      --tmpfs /tmp \
-      --tmpfs /home/codex \
-      --volume "$worktree_dir:/workspace:rw" \
-      --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
-      "${git_config_mount_arg[@]}" \
-      --volume "$HOME/.codex:/home/codex/.codex:rw" \
-      "${container_gh_config_arg[@]}" \
-      "${container_gh_bootstrap_arg[@]}" \
-      "${container_ssh_dir_arg[@]}" \
-      "${container_ssh_agent_arg[@]}" \
-      "${container_ngrok_config_arg[@]}" \
-      "${env_file_arg[@]}" \
-      --env CODEX_HOME=/home/codex/.codex \
-      --env GH_CONFIG_DIR=/tmp/pulse-home/.config/gh \
-      --env "CXHERE_GH_HOST_CONFIG_DIR=$gh_host_mount_target" \
-      "${git_config_env_arg[@]}" \
-      --env NPM_CONFIG_CACHE=/tmp/npm-cache \
-      --env TMPDIR=/tmp \
-      --env HOME=/tmp/pulse-home \
-      --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
-      --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
-      --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
-      --env "DISPLAY=${DISPLAY:-:99}" \
-      --env "XVFB_SCREEN=${XVFB_SCREEN:-$container_xvfb_screen}" \
-      --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
-      --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
-      --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
-      --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
-      --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
-      --workdir /workspace \
-      "$image_name" \
-      "${codex_args[@]}" \
-      --dangerously-bypass-approvals-and-sandbox \
-      --search
+    if [ "${#codex_args[@]}" -gt 0 ]; then
+      container run --remove --interactive --tty \
+        --init \
+        --user codex \
+        "${runtime_label_args[@]}" \
+        --cpus "$container_cpus" \
+        --memory "$container_memory" \
+        "${container_platform_args[@]}" \
+        --read-only \
+        --tmpfs /tmp \
+        --tmpfs /home/codex \
+        --volume "$worktree_dir:/workspace:rw" \
+        --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
+        "${git_config_mount_arg[@]}" \
+        --volume "$HOME/.codex:/home/codex/.codex:rw" \
+        "${container_gh_config_arg[@]}" \
+        "${container_gh_bootstrap_arg[@]}" \
+        "${container_ssh_dir_arg[@]}" \
+        "${container_ssh_agent_arg[@]}" \
+        "${container_ngrok_config_arg[@]}" \
+        "${env_file_arg[@]}" \
+        --env CODEX_HOME=/home/codex/.codex \
+        --env GH_CONFIG_DIR=/tmp/pulse-home/.config/gh \
+        --env "CXHERE_GH_HOST_CONFIG_DIR=$gh_host_mount_target" \
+        "${git_config_env_arg[@]}" \
+        --env NPM_CONFIG_CACHE=/tmp/npm-cache \
+        --env TMPDIR=/tmp \
+        --env HOME=/tmp/pulse-home \
+        --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
+        --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
+        --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
+        --env "DISPLAY=${DISPLAY:-:99}" \
+        --env "XVFB_SCREEN=${XVFB_SCREEN:-$container_xvfb_screen}" \
+        --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
+        --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
+        --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+        --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
+        --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
+        --workdir /workspace \
+        "$image_name" \
+        "${codex_args[@]}" \
+        --dangerously-bypass-approvals-and-sandbox \
+        --search
+    else
+      container run --remove --interactive --tty \
+        --init \
+        --user codex \
+        "${runtime_label_args[@]}" \
+        --cpus "$container_cpus" \
+        --memory "$container_memory" \
+        "${container_platform_args[@]}" \
+        --read-only \
+        --tmpfs /tmp \
+        --tmpfs /home/codex \
+        --volume "$worktree_dir:/workspace:rw" \
+        --volume "$repo_root_mount:$repo_root_mount:$container_repo_root_mount_mode" \
+        "${git_config_mount_arg[@]}" \
+        --volume "$HOME/.codex:/home/codex/.codex:rw" \
+        "${container_gh_config_arg[@]}" \
+        "${container_gh_bootstrap_arg[@]}" \
+        "${container_ssh_dir_arg[@]}" \
+        "${container_ssh_agent_arg[@]}" \
+        "${container_ngrok_config_arg[@]}" \
+        "${env_file_arg[@]}" \
+        --env CODEX_HOME=/home/codex/.codex \
+        --env GH_CONFIG_DIR=/tmp/pulse-home/.config/gh \
+        --env "CXHERE_GH_HOST_CONFIG_DIR=$gh_host_mount_target" \
+        "${git_config_env_arg[@]}" \
+        --env NPM_CONFIG_CACHE=/tmp/npm-cache \
+        --env TMPDIR=/tmp \
+        --env HOME=/tmp/pulse-home \
+        --env XDG_RUNTIME_DIR=/tmp/xdg-runtime \
+        --env XDG_CONFIG_HOME=/tmp/pulse-home/.config \
+        --env XDG_CACHE_HOME=/tmp/pulse-home/.cache \
+        --env "DISPLAY=${DISPLAY:-:99}" \
+        --env "XVFB_SCREEN=${XVFB_SCREEN:-$container_xvfb_screen}" \
+        --env "PULSE_SERVER=${PULSE_SERVER:-unix:/tmp/xdg-runtime/pulse/native}" \
+        --env PULSE_COOKIE=/tmp/xdg-runtime/pulse/cookie \
+        --env PULSE_CLIENTCONFIG=/tmp/xdg-runtime/pulse/client.conf \
+        --env "HARNESS_CAPTURE_WITH_FFMPEG=${HARNESS_CAPTURE_WITH_FFMPEG:-1}" \
+        --env "HARNESS_CAPTURE_AUDIO_FORMAT=${HARNESS_CAPTURE_AUDIO_FORMAT:-pulse}" \
+        --workdir /workspace \
+        "$image_name" \
+        --dangerously-bypass-approvals-and-sandbox \
+        --search
+    fi
   else
     if [ -f "$env_file" ]; then
       set -a
@@ -945,7 +1036,11 @@ cxhere() {
       echo "codex CLI not found in PATH; install it or use CXHERE_RUNTIME=container/docker." >&2
       return 1
     fi
-    (cd "$worktree_dir" && codex "${codex_args[@]}" --dangerously-bypass-approvals-and-sandbox --search)
+    if [ "${#codex_args[@]}" -gt 0 ]; then
+      (cd "$worktree_dir" && codex "${codex_args[@]}" --dangerously-bypass-approvals-and-sandbox --search)
+    else
+      (cd "$worktree_dir" && codex --dangerously-bypass-approvals-and-sandbox --search)
+    fi
   fi
   )
 }
@@ -974,6 +1069,7 @@ cxclose() {
   repo_name="$(basename "$repo_root")"
   worktrees_root="$repo_parent/${repo_name}-worktrees"
   worktree_dir="$worktrees_root/$worktree_slug"
+  cx_prune_codex_worktrees "$repo_root" "$worktrees_root"
 
   candidate_count="$(
     git -C "$repo_root" worktree list --porcelain | awk -v base="$worktrees_root/" -v req="$requested_name" -v expected="$worktree_dir" '
@@ -1048,6 +1144,35 @@ cxclose() {
   fi
   resolved_worktree="$tracked_path"
   resolved_branch="${tracked_branch#refs/heads/}"
+
+  if [ ! -d "$resolved_worktree" ]; then
+    cx_prune_codex_worktrees "$repo_root" "$worktrees_root"
+    tracked_path="$(
+      git -C "$repo_root" worktree list --porcelain | awk -v base="$worktrees_root/" -v req="$requested_name" -v expected="$worktree_dir" '
+        $1=="worktree"{wt=$2; branch=""; inwt=1; next}
+        $1=="branch" && inwt{branch=$2; next}
+        $0==""{
+          if (index(wt, base)==1) {
+            b=branch
+            sub(/^refs\/heads\//, "", b)
+            n=wt
+            sub(/^.*\//, "", n)
+            if (wt==expected || wt==req || n==req || b==req) {
+              print wt
+              exit
+            }
+          }
+          inwt=0
+        }
+      '
+    )"
+    if [ -z "$tracked_path" ]; then
+      echo "worktree not found for: $requested_name" >&2
+      echo "hint: stale git worktree metadata was pruned; retry tab completion if your shell cached suggestions." >&2
+      return 1
+    fi
+    resolved_worktree="$tracked_path"
+  fi
 
   locked_line="$(git -C "$repo_root" worktree list --porcelain | awk -v wt="$resolved_worktree" '
     $1=="worktree"{inwt=($2==wt)}
@@ -1167,6 +1292,25 @@ EOF
   )
 }
 
+cx_prune_codex_worktrees() {
+  local repo_root worktrees_root
+
+  repo_root="$1"
+  worktrees_root="$2"
+
+  [ -n "$repo_root" ] || return 0
+  [ -n "$worktrees_root" ] || return 0
+
+  if git -C "$repo_root" worktree list --porcelain | awk -v base="$worktrees_root/" '
+    $1=="worktree"{wt=$2; inwt=1; next}
+    inwt && $1=="prunable" && index(wt, base)==1 { found=1; exit }
+    $0==""{inwt=0}
+    END{ exit found ? 0 : 1 }
+  '; then
+    git -C "$repo_root" worktree prune --expire now >/dev/null 2>&1 || true
+  fi
+}
+
 cxlist() {
   cx_command_prelude "cxlist"
   set -e
@@ -1176,6 +1320,7 @@ cxlist() {
   repo_parent="$(dirname "$repo_root")"
   repo_name="$(basename "$repo_root")"
   worktrees_root="$repo_parent/${repo_name}-worktrees"
+  cx_prune_codex_worktrees "$repo_root" "$worktrees_root"
 
   echo "codex worktrees under $worktrees_root:"
   list_output="$(git -C "$repo_root" worktree list --porcelain | awk -v base="$worktrees_root/" '
@@ -1213,6 +1358,7 @@ cx_worktree_names() {
   repo_parent="$(dirname "$repo_root")"
   repo_name="$(basename "$repo_root")"
   worktrees_root="$repo_parent/${repo_name}-worktrees"
+  cx_prune_codex_worktrees "$repo_root" "$worktrees_root"
 
   git -C "$repo_root" worktree list --porcelain | awk -v base="$worktrees_root/" '
     $1=="worktree"{wt=$2; branch=""; inwt=1; next}
