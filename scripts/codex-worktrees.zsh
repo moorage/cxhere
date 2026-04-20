@@ -237,22 +237,99 @@ EOF
   echo "cxharness complete: copied $copied_count file(s), overwrote $overwrite_count, skipped $skipped_count" >&2
 }
 
+cxhere_usage() {
+  echo "usage: cxhere [-p port[:container-port][/protocol]]... [--] <worktree-name> [session-id]" >&2
+  echo "  -p, --port     bind a localhost port from the containerized session (for example: -p 5173 or -p 5173:5713)" >&2
+  echo "env: CXHERE_RUNTIME=auto|container|docker|local (CXHERE_NO_DOCKER=1 is a legacy alias for local)" >&2
+}
+
+cxhere_port_is_valid() {
+  case "${1:-}" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
+cxhere_normalize_publish_spec() {
+  local raw spec protocol host_ip port_spec host_port container_port
+  raw="${1:-}"
+
+  if [ -z "$raw" ]; then
+    echo "cxhere: empty publish spec" >&2
+    return 1
+  fi
+
+  protocol="tcp"
+  spec="$raw"
+  case "$spec" in
+    */*)
+      protocol="${spec##*/}"
+      spec="${spec%/*}"
+      ;;
+  esac
+
+  case "$protocol" in
+    tcp|udp) ;;
+    *)
+      echo "cxhere: unsupported publish protocol in '$raw' (expected tcp or udp)" >&2
+      return 1
+      ;;
+  esac
+
+  case "$spec" in
+    localhost:*)
+      host_ip="127.0.0.1"
+      port_spec="${spec#localhost:}"
+      ;;
+    127.0.0.1:*)
+      host_ip="127.0.0.1"
+      port_spec="${spec#127.0.0.1:}"
+      ;;
+    *:*:*)
+      echo "cxhere: publish specs must bind to localhost; use '-p 5173' or '-p 5173:5713'" >&2
+      return 1
+      ;;
+    *)
+      host_ip="127.0.0.1"
+      port_spec="$spec"
+      ;;
+  esac
+
+  case "$port_spec" in
+    *:*)
+      host_port="${port_spec%%:*}"
+      container_port="${port_spec##*:}"
+      ;;
+    *)
+      host_port="$port_spec"
+      container_port="$port_spec"
+      ;;
+  esac
+
+  if ! cxhere_port_is_valid "$host_port"; then
+    echo "cxhere: invalid host port in publish spec '$raw'" >&2
+    return 1
+  fi
+  if ! cxhere_port_is_valid "$container_port"; then
+    echo "cxhere: invalid container port in publish spec '$raw'" >&2
+    return 1
+  fi
+
+  printf '%s\n' "${host_ip}:${host_port}:${container_port}/${protocol}"
+}
+
 cxhere() {
   cx_command_prelude "cxhere"
   # Run in a subshell so `set -e` can't terminate the caller's shell.
   # This avoids zsh exiting entirely when a command fails.
   ( set -e
-  if [ -z "$1" ]; then
-    echo "usage: cxhere <worktree-name> [session-id]" >&2
-    echo "env: CXHERE_RUNTIME=auto|container|docker|local (CXHERE_NO_DOCKER=1 is a legacy alias for local)" >&2
-    return 2
-  fi
-
   local branch_name worktree_slug repo_root repo_parent repo_name worktrees_root worktree_dir
   local session_id
   local runtime other_runtime local_mode
   local image_name
   local -a codex_args
+  local -a publish_specs
+  local -a publish_args
   local plans_url plans_path create_plans
   local agents_url agents_path create_agents
   local env_file create_env_file
@@ -309,10 +386,51 @@ cxhere() {
   local launch_config_ssh_source
   local launch_config_ssh_agent
   local launch_config_ngrok_source
+  local launch_config_publish
   local -a runtime_label_args
   local container_cpus
   local container_memory
   local container_xvfb_screen
+  local raw_publish_spec publish_spec
+
+  publish_specs=()
+  publish_args=()
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -p|--port)
+        if [ "$#" -lt 2 ]; then
+          echo "cxhere: missing value for $1" >&2
+          cxhere_usage
+          return 2
+        fi
+        raw_publish_spec="$2"
+        publish_spec="$(cxhere_normalize_publish_spec "$raw_publish_spec")" || {
+          cxhere_usage
+          return 2
+        }
+        publish_specs+=("$publish_spec")
+        publish_args+=(--publish "$publish_spec")
+        shift 2
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        echo "cxhere: unknown option: $1" >&2
+        cxhere_usage
+        return 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+  if [ -z "${1-}" ] || [ "$#" -gt 2 ]; then
+    [ "$#" -gt 2 ] && echo "cxhere: too many positional arguments" >&2
+    cxhere_usage
+    return 2
+  fi
 
   repo_root="$(git rev-parse --show-toplevel)"
   branch_name="$1"
@@ -390,6 +508,11 @@ cxhere() {
 
   if [ "$runtime" = "local" ]; then
     local_mode=1
+  fi
+
+  if [ "$local_mode" -eq 1 ] && [ "${#publish_specs[@]}" -gt 0 ]; then
+    echo "cxhere: -p/--port requires CXHERE_RUNTIME=container or docker" >&2
+    return 2
   fi
 
   case "${CXHERE_GH:-1}" in
@@ -686,6 +809,7 @@ cxhere() {
     launch_config_ssh_source="none"
     launch_config_ssh_agent="0"
     launch_config_ngrok_source="none"
+    launch_config_publish="none"
 
     runtime_label_args=(
       --label "${CXHERE_LABEL_REPO_KEY}=${repo_root}"
@@ -754,6 +878,11 @@ cxhere() {
       fi
     fi
 
+    if [ "${#publish_specs[@]}" -gt 0 ]; then
+      launch_config_publish="$(printf '%s,' "${publish_specs[@]}")"
+      launch_config_publish="${launch_config_publish%,}"
+    fi
+
     launch_config_hash="$(
       cx_sha256_value "$(printf '%s\n' \
         "launch_config_version=2" \
@@ -761,7 +890,8 @@ cxhere() {
         "gh=$launch_config_gh_source" \
         "ssh=$launch_config_ssh_source" \
         "ssh_agent=$launch_config_ssh_agent" \
-        "ngrok=$launch_config_ngrok_source")"
+        "ngrok=$launch_config_ngrok_source" \
+        "publish=$launch_config_publish")"
     )" || return 1
 
     runtime_label_args+=(
@@ -832,6 +962,7 @@ cxhere() {
         "${runtime_label_args[@]}" \
         "${docker_security_opts[@]}" \
         "${docker_resource_opts[@]}" \
+        "${publish_args[@]}" \
         --read-only \
         --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=${tmpfs_tmp_size}" \
         --tmpfs "/home/codex:rw,noexec,nosuid,nodev,size=${tmpfs_home_size},uid=10001,gid=10001" \
@@ -877,6 +1008,7 @@ cxhere() {
         "${runtime_label_args[@]}" \
         "${docker_security_opts[@]}" \
         "${docker_resource_opts[@]}" \
+        "${publish_args[@]}" \
         --read-only \
         --tmpfs "/tmp:rw,noexec,nosuid,nodev,size=${tmpfs_tmp_size}" \
         --tmpfs "/home/codex:rw,noexec,nosuid,nodev,size=${tmpfs_home_size},uid=10001,gid=10001" \
@@ -948,6 +1080,7 @@ cxhere() {
         --cpus "$container_cpus" \
         --memory "$container_memory" \
         "${container_platform_args[@]}" \
+        "${publish_args[@]}" \
         --read-only \
         --tmpfs /tmp \
         --tmpfs /home/codex \
@@ -991,6 +1124,7 @@ cxhere() {
         --cpus "$container_cpus" \
         --memory "$container_memory" \
         "${container_platform_args[@]}" \
+        "${publish_args[@]}" \
         --read-only \
         --tmpfs /tmp \
         --tmpfs /home/codex \
@@ -1383,7 +1517,10 @@ if [ -n "${ZSH_VERSION-}" ]; then
   }
 
   _cxhere() {
-    _arguments '1:worktree name:_cxclose_complete' '2:session id: '
+    _arguments \
+      '(-p --port)'{-p,--port}'[bind a localhost port from the containerized session]:port spec: ' \
+      '1:worktree name:_cxclose_complete' \
+      '2:session id: '
   }
 
   _cxclose() {
@@ -1412,7 +1549,56 @@ if [ -n "${BASH_VERSION-}" ]; then
     options="$(cx_worktree_names | tr '\n' ' ')"
     COMPREPLY=($(compgen -W "$options" -- "$cur"))
   }
-  complete -F _cxworktree_bash_complete cxhere 2>/dev/null || true
+
+  _cxhere_bash_complete() {
+    local cur word options
+    local expecting_publish positional_count
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    expecting_publish=0
+    positional_count=0
+
+    if [ "$COMP_CWORD" -gt 0 ]; then
+      for word in "${COMP_WORDS[@]:1:$((COMP_CWORD - 1))}"; do
+        if [ "$expecting_publish" -eq 1 ]; then
+          expecting_publish=0
+          continue
+        fi
+        case "$word" in
+          -p|--port)
+            expecting_publish=1
+            ;;
+          --)
+            positional_count=$((positional_count + 1))
+            ;;
+          -*)
+            ;;
+          *)
+            positional_count=$((positional_count + 1))
+            ;;
+        esac
+      done
+    fi
+
+    if [ "$expecting_publish" -eq 1 ]; then
+      COMPREPLY=()
+      return 0
+    fi
+
+    if [[ "$cur" == -* ]] && [ "$positional_count" -eq 0 ]; then
+      COMPREPLY=($(compgen -W "-p --port --" -- "$cur"))
+      return 0
+    fi
+
+    if [ "$positional_count" -eq 0 ]; then
+      options="$(cx_worktree_names | tr '\n' ' ')"
+      COMPREPLY=($(compgen -W "$options" -- "$cur"))
+      return 0
+    fi
+
+    COMPREPLY=()
+  }
+
+  complete -F _cxhere_bash_complete cxhere 2>/dev/null || true
   complete -F _cxworktree_bash_complete cxclose 2>/dev/null || true
   complete -F _cxworktree_bash_complete cxkill 2>/dev/null || true
 fi

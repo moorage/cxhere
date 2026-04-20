@@ -102,3 +102,112 @@ EOF
 fi
 
 echo "stale codex worktrees are pruned before completion, listing, and close"
+
+if ! bash -lc '
+  set -euo pipefail
+  repo_root="'"$repo_root"'"
+  tmpdir="$(mktemp -d)"
+  trap '\''rm -rf "$tmpdir"'\'' EXIT
+
+  export HOME="$tmpdir/home"
+  mkdir -p "$HOME/.codex" "$tmpdir/bin"
+  PATH="$tmpdir/bin:$PATH"
+  export PATH
+
+  cat > "$tmpdir/bin/docker" <<'\''EOF'\''
+#!/usr/bin/env bash
+printf "%s\n" "$@" > "$CXHERE_TEST_DOCKER_ARGS_FILE"
+EOF
+  cat > "$tmpdir/bin/container" <<'\''EOF'\''
+#!/usr/bin/env bash
+printf "%s\n" "$@" > "$CXHERE_TEST_CONTAINER_ARGS_FILE"
+EOF
+  chmod +x "$tmpdir/bin/docker" "$tmpdir/bin/container"
+
+  cat > "$HOME/.codex/AGENTS.md" <<'\''EOF'\''
+# test
+EOF
+  cat > "$HOME/.codex/config.toml" <<'\''EOF'\''
+[projects."/workspace"]
+trust_level = "trusted"
+EOF
+  cat > "$HOME/.gitconfig" <<'\''EOF'\''
+[user]
+  name = Test User
+  email = test@example.com
+EOF
+
+  source "$repo_root/scripts/codex-worktrees.zsh"
+  cx_command_prelude() { :; }
+  cx_require_runtime() { :; }
+  cx_require_local_image() { :; }
+  cx_runtime_ready_silent() { return 1; }
+  cx_list_worktree_containers() { return 0; }
+
+  git init "$tmpdir/repo" >/dev/null
+  git -C "$tmpdir/repo" config user.name "Test User"
+  git -C "$tmpdir/repo" config user.email "test@example.com"
+  mkdir -p "$tmpdir/repo/docs"
+  printf "seed\n" > "$tmpdir/repo/README.md"
+  printf "plan\n" > "$tmpdir/repo/docs/PLANS.md"
+  printf ".pw-browsers\nseccomp_profile.json\n.env*\n" > "$tmpdir/repo/.gitignore"
+  git -C "$tmpdir/repo" add README.md docs/PLANS.md .gitignore
+  git -C "$tmpdir/repo" commit -m init >/dev/null
+  printf "PORT=5173\n" > "$tmpdir/repo/.env.cx.local"
+
+  export CXHERE_TEST_DOCKER_ARGS_FILE="$tmpdir/docker.args"
+  set +u
+  docker_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=docker cxhere -p 5173 -p 5174:5714/udp test/docker 2>&1)"
+  set -u
+  if ! printf "%s\n" "$docker_output" | rg -F "worktree directory:" >/dev/null; then
+    echo "expected docker cxhere invocation to complete" >&2
+    exit 1
+  fi
+  if ! rg -F -x -- "--publish" "$CXHERE_TEST_DOCKER_ARGS_FILE" >/dev/null; then
+    echo "expected docker run invocation to include --publish" >&2
+    exit 1
+  fi
+  if ! rg -F -x "127.0.0.1:5173:5173/tcp" "$CXHERE_TEST_DOCKER_ARGS_FILE" >/dev/null; then
+    echo "expected docker run invocation to publish host 5173 to container 5173" >&2
+    exit 1
+  fi
+  if ! rg -F -x "127.0.0.1:5174:5714/udp" "$CXHERE_TEST_DOCKER_ARGS_FILE" >/dev/null; then
+    echo "expected docker run invocation to publish host 5174 to container 5714/udp" >&2
+    exit 1
+  fi
+
+  export CXHERE_TEST_CONTAINER_ARGS_FILE="$tmpdir/container.args"
+  set +u
+  container_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=container cxhere --port 5173:5713 test/container 2>&1)"
+  set -u
+  if ! printf "%s\n" "$container_output" | rg -F "worktree directory:" >/dev/null; then
+    echo "expected Apple container cxhere invocation to complete" >&2
+    exit 1
+  fi
+  if ! rg -F -x -- "--publish" "$CXHERE_TEST_CONTAINER_ARGS_FILE" >/dev/null; then
+    echo "expected container run invocation to include --publish" >&2
+    exit 1
+  fi
+  if ! rg -F -x "127.0.0.1:5173:5713/tcp" "$CXHERE_TEST_CONTAINER_ARGS_FILE" >/dev/null; then
+    echo "expected container run invocation to publish host 5173 to container 5713" >&2
+    exit 1
+  fi
+
+  set +eu
+  local_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=local cxhere -p 5173 test/local 2>&1)"
+  local_status=$?
+  set -euo pipefail
+  if [ "$local_status" -eq 0 ]; then
+    echo "expected local cxhere invocation with -p to fail" >&2
+    exit 1
+  fi
+  if ! printf "%s\n" "$local_output" | rg -F "cxhere: -p/--port requires CXHERE_RUNTIME=container or docker" >/dev/null; then
+    echo "expected local cxhere invocation to explain the unsupported -p flag" >&2
+    exit 1
+  fi
+'; then
+  echo "expected cxhere -p to publish localhost ports for Docker and Apple container runtimes" >&2
+  exit 1
+fi
+
+echo "cxhere -p publishes localhost ports for Docker and Apple container runtimes"

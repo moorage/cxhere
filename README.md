@@ -117,6 +117,16 @@ CXHERE_RUNTIME=local cxhere mpm/my-feature
 CXHERE_NO_DOCKER=1 cxhere mpm/my-feature
 ```
 
+Publish loopback ports from the session back to the host:
+
+```bash
+cxhere -p 5173 mpm/my-feature
+cxhere -p 5173:5713 mpm/my-feature
+cxhere -p 5173 -p 9229 mpm/my-feature
+```
+
+`-p` / `--port` only applies to containerized sessions and always binds `127.0.0.1` on the host. `-p 5173` maps host `127.0.0.1:5173` to container port `5173`; `-p 5173:5713` maps host `127.0.0.1:5173` to container port `5713`. Repeat the flag to bind multiple ports.
+
 With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete known Codex worktree branch names.
 
 `cxharness` downloads the current contents of `moorage/new-codex-project-harness`, recreates its directory/file structure in the current directory, and asks before overwriting any existing file.

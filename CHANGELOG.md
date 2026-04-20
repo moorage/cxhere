@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-19
+- Added `cxhere -p` / `--port` for containerized sessions, so you can bind loopback-only host ports like `-p 5173` or `-p 5173:5713` through either Docker or Apple `container`.
+- Included published port mappings in the launch-config fingerprint, so changing `-p` now replaces a reused session instead of silently keeping stale host bindings.
+- Added shell regressions covering Docker and Apple `container` port publishing plus the local-runtime rejection path.
+
 ## 2026-04-18
 - Pruned stale codex-managed Git worktree registrations before `cxlist`, `cxclose`, completion lookup, and `cxhere` reuse checks, so deleted worktree directories no longer linger in completions or block recreation until a manual `git worktree prune`.
 - Fixed `cxclose` to recover cleanly when a selected managed worktree path is already gone on disk, pruning stale metadata and returning a clear not-found message instead of surfacing a downstream Git `cannot change to` fatal.
