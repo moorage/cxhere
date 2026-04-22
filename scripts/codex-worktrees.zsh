@@ -157,7 +157,7 @@ cxupdate() {
 cxharness() {
   local harness_slug harness_tarball_url temp_root extract_root source_root destination_root
   local file_count copied_count skipped_count overwrite_count rel_path src_file dest_file dest_dir
-  local file_list
+  local file_list copied_paths_file
 
   cx_command_prelude "cxharness"
   harness_slug="moorage/new-codex-project-harness"
@@ -222,6 +222,8 @@ cxharness() {
   copied_count=0
   skipped_count=0
   overwrite_count=0
+  copied_paths_file="$temp_root/copied-paths.txt"
+  : > "$copied_paths_file"
   while IFS= read -r rel_path; do
     [ -n "$rel_path" ] || continue
     src_file="$source_root/$rel_path"
@@ -245,12 +247,28 @@ cxharness() {
     fi
 
     cp -p "$src_file" "$dest_file"
+    printf '%s\n' "$rel_path" >> "$copied_paths_file"
     copied_count=$((copied_count + 1))
   done <<EOF
 $file_list
 EOF
 
   echo "cxharness complete: copied $copied_count file(s), overwrote $overwrite_count, skipped $skipped_count" >&2
+  if [ "$copied_count" -gt 0 ] && cx_prompt_yes_no "Create a git commit for the downloaded harness files with message \"cxharness\"? [Y/n] " Y; then
+    set --
+    while IFS= read -r rel_path; do
+      [ -n "$rel_path" ] || continue
+      set -- "$@" "$rel_path"
+    done < "$copied_paths_file"
+    if ! git -C "$destination_root" add -- "$@"; then
+      echo "failed to stage downloaded harness files for commit" >&2
+      return 1
+    fi
+    if ! git -C "$destination_root" commit -m "cxharness" --only -- "$@"; then
+      echo "failed to create git commit for downloaded harness files" >&2
+      return 1
+    fi
+  fi
 }
 
 cxhere_usage() {

@@ -123,12 +123,16 @@ EOF
   printf "plan\n" > "$tmpdir/harness/new-codex-project-harness-main/docs/PLANS.md"
   tar -czf "$tmpdir/harness.tar.gz" -C "$tmpdir/harness" new-codex-project-harness-main
   export CXHERE_TEST_HARNESS_TARBALL="$tmpdir/harness.tar.gz"
+  export GIT_AUTHOR_NAME="Test User"
+  export GIT_AUTHOR_EMAIL="test@example.com"
+  export GIT_COMMITTER_NAME="Test User"
+  export GIT_COMMITTER_EMAIL="test@example.com"
   project_dir="$(cd "$tmpdir/project" && pwd -P)"
 
   source "$repo_root/scripts/codex-worktrees.zsh"
   cx_command_prelude() { :; }
 
-  output="$(cd "$tmpdir/project" && printf "y\ny\n" | cxharness 2>&1)"
+  output="$(cd "$tmpdir/project" && printf "y\ny\n\n" | cxharness 2>&1)"
   if ! printf "%s\n" "$output" | rg -F "Run git init in the current directory before importing the harness?" >/dev/null; then
     echo "expected cxharness to prompt before initializing a new git repo" >&2
     exit 1
@@ -143,6 +147,14 @@ EOF
   fi
   if [ ! -f "$project_dir/README.md" ] || [ ! -f "$project_dir/docs/PLANS.md" ]; then
     echo "expected cxharness to copy the harness files after git init" >&2
+    exit 1
+  fi
+  if ! printf "%s\n" "$output" | rg -F "Create a git commit for the downloaded harness files with message \"cxharness\"? [Y/n]" >/dev/null; then
+    echo "expected cxharness to offer a final default-yes git commit prompt" >&2
+    exit 1
+  fi
+  if [ "$(git -C "$project_dir" log -1 --pretty=%s)" != "cxharness" ]; then
+    echo "expected cxharness to create a commit with the cxharness message when the final prompt defaults to yes" >&2
     exit 1
   fi
 '; then

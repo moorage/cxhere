@@ -105,7 +105,7 @@ cat /path/to/cxhere/config.example.toml >> ~/.codex/config.toml
 | `cxkill <worktree-name>` | Stop running container session(s) for that worktree without removing the worktree. |
 | `cxlist` | List managed Codex worktrees and show whether each one is `ok`, `locked`, or `prunable`. |
 | `cxupdate` | Stage the latest GitHub release under `~/.cxhere`, swap `current`, and re-source the updated commands into the current shell. |
-| `cxharness` | Import the live `moorage/new-codex-project-harness` repo into the current directory, prompting to run `git init` first when needed, then prompting before copy and before overwriting any existing file. |
+| `cxharness` | Import the live `moorage/new-codex-project-harness` repo into the current directory, prompting to run `git init` first when needed, then prompting before copy, before overwriting any existing file, and finally before creating a `cxharness` git commit for the imported files. |
 
 Typical usage:
 
@@ -129,7 +129,7 @@ cxhere -p 5173 -p 9229 mpm/my-feature
 
 With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete known Codex worktree branch names.
 
-`cxharness` downloads the current contents of `moorage/new-codex-project-harness`, recreates its directory/file structure in the current directory, and asks before overwriting any existing file. If the current directory is not already inside a Git repository, it prompts to run `git init` before importing the harness.
+`cxharness` downloads the current contents of `moorage/new-codex-project-harness`, recreates its directory/file structure in the current directory, and asks before overwriting any existing file. If the current directory is not already inside a Git repository, it prompts to run `git init` before importing the harness. After the import finishes, it offers to create a `cxharness` commit containing only the downloaded harness files, defaulting that last prompt to yes.
 
 ## Updates
 
