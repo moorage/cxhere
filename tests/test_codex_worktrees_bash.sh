@@ -272,3 +272,66 @@ EOF
 fi
 
 echo "cxhere -p publishes localhost ports for Docker and Apple container runtimes"
+
+if ! bash -lc '
+  set -euo pipefail
+  repo_root="'"$repo_root"'"
+  tmpdir="$(mktemp -d)"
+  trap '\''rm -rf "$tmpdir"'\'' EXIT
+
+  export HOME="$tmpdir/home"
+  mkdir -p "$HOME/.codex" "$tmpdir/bin"
+  PATH="$tmpdir/bin:$PATH"
+  export PATH
+
+  cat > "$tmpdir/bin/codex" <<'\''EOF'\''
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$tmpdir/bin/codex"
+
+  cat > "$HOME/.codex/AGENTS.md" <<'\''EOF'\''
+# test
+EOF
+  cat > "$HOME/.codex/config.toml" <<'\''EOF'\''
+[projects."/workspace"]
+trust_level = "trusted"
+EOF
+
+  source "$repo_root/scripts/codex-worktrees.zsh"
+  cx_command_prelude() { :; }
+
+  git init "$tmpdir/repo" >/dev/null
+  git -C "$tmpdir/repo" config user.name "Test User"
+  git -C "$tmpdir/repo" config user.email "test@example.com"
+  mkdir -p "$tmpdir/repo/docs" "$tmpdir/repo/.env/nested"
+  printf "seed\n" > "$tmpdir/repo/README.md"
+  printf "plan\n" > "$tmpdir/repo/docs/PLANS.md"
+  printf ".pw-browsers\n.env*\n" > "$tmpdir/repo/.gitignore"
+  printf "PORT=5173\n" > "$tmpdir/repo/.env.cx.local"
+  printf "INNER=1\n" > "$tmpdir/repo/.env/local"
+  printf "NESTED=1\n" > "$tmpdir/repo/.env/nested/value"
+  git -C "$tmpdir/repo" add README.md docs/PLANS.md .gitignore
+  git -C "$tmpdir/repo" commit -m init >/dev/null
+
+  output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=local cxhere env-copy 2>&1)"
+  if ! printf "%s\n" "$output" | rg -F "worktree directory:" >/dev/null; then
+    echo "expected local cxhere invocation to complete for env copy coverage" >&2
+    exit 1
+  fi
+
+  worktree_dir="$tmpdir/repo-worktrees/env-copy"
+  if [ ! -f "$worktree_dir/.env.cx.local" ]; then
+    echo "expected cxhere to copy root env files into the worktree" >&2
+    exit 1
+  fi
+  if [ ! -f "$worktree_dir/.env/local" ] || [ ! -f "$worktree_dir/.env/nested/value" ]; then
+    echo "expected cxhere to recursively copy a root .env directory into the worktree" >&2
+    exit 1
+  fi
+'; then
+  echo "expected cxhere to copy root env files and directories into new worktrees" >&2
+  exit 1
+fi
+
+echo "cxhere copies root env files and directories into new worktrees"

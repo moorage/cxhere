@@ -761,15 +761,22 @@ cxhere() {
     fi
     shopt -s nullglob
   fi
+  local -a env_sources
   env_sources=("$repo_root"/.env*)
   if (( ${#env_sources[@]} )); then
-    local env_source env_target
+    local env_source env_target env_name
     for env_source in "${env_sources[@]}"; do
+      env_name="$(basename "$env_source")"
+      env_target="$worktree_dir/$env_name"
       if [ -f "$env_source" ]; then
-        env_target="$worktree_dir/$(basename "$env_source")"
-        if [ ! -f "$env_target" ]; then
+        if [ ! -e "$env_target" ]; then
           cp "$env_source" "$env_target"
           echo "copied env file: $env_target"
+        fi
+      elif [ -d "$env_source" ] && [ "$env_name" = ".env" ]; then
+        if [ ! -e "$env_target" ]; then
+          cp -R "$env_source" "$env_target"
+          echo "copied env directory: $env_target"
         fi
       fi
     done

@@ -1,6 +1,8 @@
 # Changelog
 
 ## 2026-04-22
+- Updated `cxhere` to recursively copy a root `.env/` directory into new worktrees while preserving the existing root `.env*` file copy behavior.
+- Added a shell regression covering the new-worktree env staging flow so both `.env*` files and nested `.env/` contents are copied.
 - Updated `cxharness` to offer a final default-yes prompt that creates a `cxharness` Git commit containing only the downloaded harness files.
 - Extended the shell regression for the non-repo `cxharness` flow to verify the new commit prompt and resulting commit message.
 - Updated `cxharness` to detect when the current directory is not already inside a Git repository, prompt before running `git init`, and initialize the repo before copying the harness files.
