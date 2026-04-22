@@ -109,6 +109,55 @@ if ! bash -lc '
   tmpdir="$(mktemp -d)"
   trap '\''rm -rf "$tmpdir"'\'' EXIT
 
+  mkdir -p "$tmpdir/bin" "$tmpdir/harness/new-codex-project-harness-main/docs" "$tmpdir/project"
+  PATH="$tmpdir/bin:$PATH"
+  export PATH
+
+  cat > "$tmpdir/bin/curl" <<'\''EOF'\''
+#!/usr/bin/env bash
+cat "$CXHERE_TEST_HARNESS_TARBALL"
+EOF
+  chmod +x "$tmpdir/bin/curl"
+
+  printf "harness\n" > "$tmpdir/harness/new-codex-project-harness-main/README.md"
+  printf "plan\n" > "$tmpdir/harness/new-codex-project-harness-main/docs/PLANS.md"
+  tar -czf "$tmpdir/harness.tar.gz" -C "$tmpdir/harness" new-codex-project-harness-main
+  export CXHERE_TEST_HARNESS_TARBALL="$tmpdir/harness.tar.gz"
+  project_dir="$(cd "$tmpdir/project" && pwd -P)"
+
+  source "$repo_root/scripts/codex-worktrees.zsh"
+  cx_command_prelude() { :; }
+
+  output="$(cd "$tmpdir/project" && printf "y\ny\n" | cxharness 2>&1)"
+  if ! printf "%s\n" "$output" | rg -F "Run git init in the current directory before importing the harness?" >/dev/null; then
+    echo "expected cxharness to prompt before initializing a new git repo" >&2
+    exit 1
+  fi
+  if ! printf "%s\n" "$output" | rg -F "initialized git repo in $project_dir" >/dev/null; then
+    echo "expected cxharness to initialize a git repo before copying harness files" >&2
+    exit 1
+  fi
+  if ! git -C "$project_dir" rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "expected cxharness to leave the destination as a git repo" >&2
+    exit 1
+  fi
+  if [ ! -f "$project_dir/README.md" ] || [ ! -f "$project_dir/docs/PLANS.md" ]; then
+    echo "expected cxharness to copy the harness files after git init" >&2
+    exit 1
+  fi
+'; then
+  echo "expected cxharness to initialize a git repo before copying into a non-repo directory" >&2
+  exit 1
+fi
+
+echo "cxharness initializes a git repo before copying into a non-repo directory"
+
+if ! bash -lc '
+  set -euo pipefail
+  repo_root="'"$repo_root"'"
+  tmpdir="$(mktemp -d)"
+  trap '\''rm -rf "$tmpdir"'\'' EXIT
+
   export HOME="$tmpdir/home"
   mkdir -p "$HOME/.codex" "$tmpdir/bin"
   PATH="$tmpdir/bin:$PATH"

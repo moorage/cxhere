@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-04-22
+- Updated `cxharness` to detect when the current directory is not already inside a Git repository, prompt before running `git init`, and initialize the repo before copying the harness files.
+- Added a shell regression covering the non-repo `cxharness` flow so the command keeps prompting and bootstrapping the destination repo in the expected order.
+
 ## 2026-04-19
 - Added `cxhere -p` / `--port` for containerized sessions, so you can bind loopback-only host ports like `-p 5173` or `-p 5173:5713` through either Docker or Apple `container`.
 - Included published port mappings in the launch-config fingerprint, so changing `-p` now replaces a reused session instead of silently keeping stale host bindings.

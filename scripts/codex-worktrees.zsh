@@ -163,6 +163,22 @@ cxharness() {
   harness_slug="moorage/new-codex-project-harness"
   harness_tarball_url="https://codeload.github.com/${harness_slug}/tar.gz/refs/heads/main"
   destination_root="$(pwd -P)"
+  if ! command -v git >/dev/null 2>&1; then
+    echo "cxharness requires git" >&2
+    return 1
+  fi
+  if ! git -C "$destination_root" rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "destination is not inside a git repository: $destination_root" >&2
+    if ! cx_prompt_yes_no "Run git init in the current directory before importing the harness? [y/N] " N; then
+      echo "cancelled" >&2
+      return 0
+    fi
+    if ! git -C "$destination_root" init >/dev/null 2>&1; then
+      echo "failed to initialize git repo in $destination_root" >&2
+      return 1
+    fi
+    echo "initialized git repo in $destination_root" >&2
+  fi
   temp_root="$(mktemp -d)" || return 1
   trap 'rm -rf "$temp_root"' EXIT INT TERM
   extract_root="$temp_root/extract"
