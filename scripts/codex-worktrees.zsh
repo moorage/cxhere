@@ -272,8 +272,9 @@ EOF
 }
 
 cxhere_usage() {
-  echo "usage: cxhere [-p port[:container-port][/protocol]]... [--] <worktree-name> [session-id]" >&2
-  echo "  -p, --port     bind a localhost port from the containerized session (for example: -p 5173 or -p 5173:5713)" >&2
+  echo "usage: cxhere [-p port[:container-port][/protocol]]... [--dns-search name]... [--] <worktree-name> [session-id]" >&2
+  echo "  -p, --port         bind a localhost port from the containerized session (for example: -p 5173 or -p 5173:5713)" >&2
+  echo "  --dns-search name  pass a DNS search domain/name through to Apple container sessions" >&2
   echo "env: CXHERE_RUNTIME=auto|container|docker|local (CXHERE_NO_DOCKER=1 is a legacy alias for local)" >&2
 }
 
@@ -364,6 +365,8 @@ cxhere() {
   local -a codex_args
   local -a publish_specs
   local -a publish_args
+  local -a dns_search_specs
+  local -a dns_search_args
   local plans_url plans_path create_plans
   local agents_url agents_path create_agents
   local env_file create_env_file
@@ -421,14 +424,17 @@ cxhere() {
   local launch_config_ssh_agent
   local launch_config_ngrok_source
   local launch_config_publish
+  local launch_config_dns_search
   local -a runtime_label_args
   local container_cpus
   local container_memory
   local container_xvfb_screen
-  local raw_publish_spec publish_spec
+  local raw_publish_spec publish_spec dns_search_spec
 
   publish_specs=()
   publish_args=()
+  dns_search_specs=()
+  dns_search_args=()
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -p|--port)
@@ -444,6 +450,22 @@ cxhere() {
         }
         publish_specs+=("$publish_spec")
         publish_args+=(--publish "$publish_spec")
+        shift 2
+        ;;
+      --dns-search)
+        if [ "$#" -lt 2 ]; then
+          echo "cxhere: missing value for $1" >&2
+          cxhere_usage
+          return 2
+        fi
+        dns_search_spec="$2"
+        if [ -z "$dns_search_spec" ]; then
+          echo "cxhere: empty DNS search value" >&2
+          cxhere_usage
+          return 2
+        fi
+        dns_search_specs+=("$dns_search_spec")
+        dns_search_args+=(--dns-search "$dns_search_spec")
         shift 2
         ;;
       --)
@@ -546,6 +568,10 @@ cxhere() {
 
   if [ "$local_mode" -eq 1 ] && [ "${#publish_specs[@]}" -gt 0 ]; then
     echo "cxhere: -p/--port requires CXHERE_RUNTIME=container or docker" >&2
+    return 2
+  fi
+  if [ "${#dns_search_specs[@]}" -gt 0 ] && [ "$runtime" != "container" ]; then
+    echo "cxhere: --dns-search requires CXHERE_RUNTIME=container" >&2
     return 2
   fi
 
@@ -851,6 +877,7 @@ cxhere() {
     launch_config_ssh_agent="0"
     launch_config_ngrok_source="none"
     launch_config_publish="none"
+    launch_config_dns_search="none"
 
     runtime_label_args=(
       --label "${CXHERE_LABEL_REPO_KEY}=${repo_root}"
@@ -923,16 +950,21 @@ cxhere() {
       launch_config_publish="$(printf '%s,' "${publish_specs[@]}")"
       launch_config_publish="${launch_config_publish%,}"
     fi
+    if [ "${#dns_search_specs[@]}" -gt 0 ]; then
+      launch_config_dns_search="$(printf '%s,' "${dns_search_specs[@]}")"
+      launch_config_dns_search="${launch_config_dns_search%,}"
+    fi
 
     launch_config_hash="$(
       cx_sha256_value "$(printf '%s\n' \
-        "launch_config_version=2" \
+        "launch_config_version=3" \
         "runtime=$runtime" \
         "gh=$launch_config_gh_source" \
         "ssh=$launch_config_ssh_source" \
         "ssh_agent=$launch_config_ssh_agent" \
         "ngrok=$launch_config_ngrok_source" \
-        "publish=$launch_config_publish")"
+        "publish=$launch_config_publish" \
+        "dns_search=$launch_config_dns_search")"
     )" || return 1
 
     runtime_label_args+=(
@@ -1122,6 +1154,7 @@ cxhere() {
         --memory "$container_memory" \
         "${container_platform_args[@]}" \
         "${publish_args[@]}" \
+        "${dns_search_args[@]}" \
         --read-only \
         --tmpfs /tmp \
         --tmpfs /home/codex \
@@ -1166,6 +1199,7 @@ cxhere() {
         --memory "$container_memory" \
         "${container_platform_args[@]}" \
         "${publish_args[@]}" \
+        "${dns_search_args[@]}" \
         --read-only \
         --tmpfs /tmp \
         --tmpfs /home/codex \
@@ -1560,6 +1594,7 @@ if [ -n "${ZSH_VERSION-}" ]; then
   _cxhere() {
     _arguments \
       '(-p --port)'{-p,--port}'[bind a localhost port from the containerized session]:port spec: ' \
+      '--dns-search[pass a DNS search domain/name through to Apple container sessions]:dns search: ' \
       '1:worktree name:_cxclose_complete' \
       '2:session id: '
   }
@@ -1593,20 +1628,20 @@ if [ -n "${BASH_VERSION-}" ]; then
 
   _cxhere_bash_complete() {
     local cur word options
-    local expecting_publish positional_count
+    local expecting_option_value positional_count
     cur="${COMP_WORDS[COMP_CWORD]}"
-    expecting_publish=0
+    expecting_option_value=0
     positional_count=0
 
     if [ "$COMP_CWORD" -gt 0 ]; then
       for word in "${COMP_WORDS[@]:1:$((COMP_CWORD - 1))}"; do
-        if [ "$expecting_publish" -eq 1 ]; then
-          expecting_publish=0
+        if [ "$expecting_option_value" -eq 1 ]; then
+          expecting_option_value=0
           continue
         fi
         case "$word" in
-          -p|--port)
-            expecting_publish=1
+          -p|--port|--dns-search)
+            expecting_option_value=1
             ;;
           --)
             positional_count=$((positional_count + 1))
@@ -1620,13 +1655,13 @@ if [ -n "${BASH_VERSION-}" ]; then
       done
     fi
 
-    if [ "$expecting_publish" -eq 1 ]; then
+    if [ "$expecting_option_value" -eq 1 ]; then
       COMPREPLY=()
       return 0
     fi
 
     if [[ "$cur" == -* ]] && [ "$positional_count" -eq 0 ]; then
-      COMPREPLY=($(compgen -W "-p --port --" -- "$cur"))
+      COMPREPLY=($(compgen -W "-p --port --dns-search --" -- "$cur"))
       return 0
     fi
 

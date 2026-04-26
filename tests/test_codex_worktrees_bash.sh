@@ -239,7 +239,7 @@ EOF
 
   export CXHERE_TEST_CONTAINER_ARGS_FILE="$tmpdir/container.args"
   set +u
-  container_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=container cxhere --port 5173:5713 test/container 2>&1)"
+  container_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=container cxhere --port 5173:5713 --dns-search test-peer test/container 2>&1)"
   set -u
   if ! printf "%s\n" "$container_output" | rg -F "worktree directory:" >/dev/null; then
     echo "expected Apple container cxhere invocation to complete" >&2
@@ -251,6 +251,14 @@ EOF
   fi
   if ! rg -F -x "127.0.0.1:5173:5713/tcp" "$CXHERE_TEST_CONTAINER_ARGS_FILE" >/dev/null; then
     echo "expected container run invocation to publish host 5173 to container 5713" >&2
+    exit 1
+  fi
+  if ! rg -F -x -- "--dns-search" "$CXHERE_TEST_CONTAINER_ARGS_FILE" >/dev/null; then
+    echo "expected container run invocation to include --dns-search" >&2
+    exit 1
+  fi
+  if ! rg -F -x "test-peer" "$CXHERE_TEST_CONTAINER_ARGS_FILE" >/dev/null; then
+    echo "expected container run invocation to include DNS search value" >&2
     exit 1
   fi
 
@@ -266,12 +274,25 @@ EOF
     echo "expected local cxhere invocation to explain the unsupported -p flag" >&2
     exit 1
   fi
+
+  set +eu
+  local_dns_output="$(cd "$tmpdir/repo" && CXHERE_RUNTIME=local cxhere --dns-search test-peer test/local 2>&1)"
+  local_dns_status=$?
+  set -euo pipefail
+  if [ "$local_dns_status" -eq 0 ]; then
+    echo "expected local cxhere invocation with --dns-search to fail" >&2
+    exit 1
+  fi
+  if ! printf "%s\n" "$local_dns_output" | rg -F "cxhere: --dns-search requires CXHERE_RUNTIME=container" >/dev/null; then
+    echo "expected local cxhere invocation to explain the unsupported --dns-search flag" >&2
+    exit 1
+  fi
 '; then
-  echo "expected cxhere -p to publish localhost ports for Docker and Apple container runtimes" >&2
+  echo "expected cxhere -p and --dns-search to pass supported runtime flags through" >&2
   exit 1
 fi
 
-echo "cxhere -p publishes localhost ports for Docker and Apple container runtimes"
+echo "cxhere -p and --dns-search pass supported runtime flags through"
 
 if ! bash -lc '
   set -euo pipefail

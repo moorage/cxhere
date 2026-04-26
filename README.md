@@ -127,6 +127,14 @@ cxhere -p 5173 -p 9229 mpm/my-feature
 
 `-p` / `--port` only applies to containerized sessions and always binds `127.0.0.1` on the host. `-p 5173` maps host `127.0.0.1:5173` to container port `5173`; `-p 5173:5713` maps host `127.0.0.1:5173` to container port `5713`. Repeat the flag to bind multiple ports.
 
+Pass Apple `container` DNS search names through to the session:
+
+```bash
+CXHERE_RUNTIME=container cxhere --dns-search other-container mpm/my-feature
+```
+
+`--dns-search` only applies to Apple `container` sessions. Repeat the flag to pass multiple search names.
+
 With shell completion enabled, `cxhere`, `cxclose`, and `cxkill` autocomplete known Codex worktree branch names.
 
 `cxharness` downloads the current contents of `moorage/new-codex-project-harness`, recreates its directory/file structure in the current directory, and asks before overwriting any existing file. If the current directory is not already inside a Git repository, it prompts to run `git init` before importing the harness. After the import finishes, it offers to create a `cxharness` commit containing only the downloaded harness files, defaulting that last prompt to yes.

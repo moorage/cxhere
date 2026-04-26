@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+- Added `cxhere --dns-search <name>` for Apple `container` sessions, passing the flag through to `container run` and including it in the launch-config fingerprint.
+- Added shell regression coverage for Apple `container` DNS search passthrough and local-runtime rejection.
+
 ## 2026-04-22
 - Updated `cxhere` to recursively copy a root `.env/` directory into new worktrees while preserving the existing root `.env*` file copy behavior.
 - Added a shell regression covering the new-worktree env staging flow so both `.env*` files and nested `.env/` contents are copied.
