@@ -58,6 +58,12 @@ CX_BUILD_RUNTIME=docker ./scripts/build-local.sh
 CX_BUILD_RUNTIME=all ./scripts/build-local.sh
 ```
 
+### Apple `container` Build Troubleshooting
+
+- If `CX_BUILD_RUNTIME=container ./scripts/build-local.sh` fails with `Apple container guest networking cannot reach ports.ubuntu.com:80`, first check the host forwarding flag with `sysctl net.inet.ip.forwarding`.
+- We have seen Apple guest NAT come up on `bridge100` while external IPv4 forwarding was still off on the host, which leaves the guest able to reach `192.168.64.1` but unable to reach public package mirrors.
+- If `net.inet.ip.forwarding` is `0`, temporarily enable it with `sudo sysctl -w net.inet.ip.forwarding=1` and retry the build. If that fixes the build, follow up on the host `InternetSharing` / vmnet state instead of changing the repo.
+
 ### Build Flags
 
 | Variable | Default | Applies to | Effect |

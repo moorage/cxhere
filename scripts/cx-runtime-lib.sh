@@ -443,6 +443,32 @@ cx_container_runtime_ready() {
   container system status >/dev/null 2>&1
 }
 
+cx_container_build_network_probe_host() {
+  printf '%s\n' "${CXHERE_CONTAINER_BUILD_NETWORK_PROBE_HOST:-ports.ubuntu.com}"
+}
+
+cx_has_container_build_proxy() {
+  [ -n "${HTTPS_PROXY:-}" ] \
+    || [ -n "${https_proxy:-}" ] \
+    || [ -n "${HTTP_PROXY:-}" ] \
+    || [ -n "${http_proxy:-}" ] \
+    || [ -n "${ALL_PROXY:-}" ] \
+    || [ -n "${all_proxy:-}" ]
+}
+
+cx_container_build_network_ready() {
+  local probe_host timeout_seconds
+  if cx_has_container_build_proxy; then
+    return 0
+  fi
+  probe_host="$(cx_container_build_network_probe_host)"
+  [ -n "$probe_host" ] || return 0
+  timeout_seconds="${CXHERE_CONTAINER_BUILD_NETWORK_TIMEOUT:-15}"
+  cx_run_with_timeout "$timeout_seconds" \
+    container run --rm ubuntu:25.10 bash -lc "set -euo pipefail; : > /dev/tcp/${probe_host}/80" \
+    >/dev/null 2>&1
+}
+
 cx_docker_runtime_ready() {
   command -v docker >/dev/null 2>&1 || return 1
   docker version --format '{{json .Server}}' >/dev/null 2>&1

@@ -215,3 +215,58 @@ if ! rg -F -x "$expected_service_ref" "$launchctl_calls_file" >/dev/null; then
 fi
 
 echo "cx_force_kill_container_runtime_job kills the launchd service for a stuck container"
+
+container_probe_args_file="$tmpdir/container-probe.args"
+cx_run_with_timeout() {
+  shift
+  "$@"
+}
+container() {
+  printf '%s\n' "$@" > "$container_probe_args_file"
+  return 0
+}
+
+if ! CXHERE_CONTAINER_BUILD_NETWORK_PROBE_HOST="example.com" cx_container_build_network_ready; then
+  echo "expected container build network probe to succeed when the probe command succeeds" >&2
+  exit 1
+fi
+
+if ! rg -F -x 'run' "$container_probe_args_file" >/dev/null; then
+  echo "expected container build network probe to invoke container run" >&2
+  exit 1
+fi
+if ! rg -F -x -- '--rm' "$container_probe_args_file" >/dev/null; then
+  echo "expected container build network probe to run the helper container ephemerally" >&2
+  exit 1
+fi
+if ! rg -F -x 'ubuntu:25.10' "$container_probe_args_file" >/dev/null; then
+  echo "expected container build network probe to reuse the Ubuntu base image" >&2
+  exit 1
+fi
+if ! rg -F -x 'set -euo pipefail; : > /dev/tcp/example.com/80' "$container_probe_args_file" >/dev/null; then
+  echo "expected container build network probe to test TCP reachability to the configured host" >&2
+  exit 1
+fi
+
+container() {
+  return 1
+}
+
+if CXHERE_CONTAINER_BUILD_NETWORK_PROBE_HOST="example.com" cx_container_build_network_ready; then
+  echo "expected container build network probe to fail when the probe command fails" >&2
+  exit 1
+fi
+
+echo "cx_container_build_network_ready surfaces Apple container guest egress failures"
+
+container() {
+  echo "unexpected container invocation when an explicit build proxy is set" >&2
+  return 1
+}
+
+if ! HTTPS_PROXY="http://10.210.0.1:8899" cx_container_build_network_ready; then
+  echo "expected explicit build proxy configuration to bypass the direct egress probe" >&2
+  exit 1
+fi
+
+echo "cx_container_build_network_ready accepts explicit build proxy configuration"

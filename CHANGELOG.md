@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Documented the host-side Apple `container` networking failure mode in `README.md`, including checking `net.inet.ip.forwarding` when the guest cannot reach `ports.ubuntu.com`.
+- Kept the first Ubuntu apt bootstrap on plain HTTP long enough to install `ca-certificates`, then switch the image over to HTTPS mirrors for later package steps.
+- Added an Apple `container` build-network probe, so arm64 builds fail fast with a Docker fallback hint when the guest VM cannot reach the initial `ports.ubuntu.com` bootstrap path.
+- Updated Apple `container` builds to honor standard proxy environment variables (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, and lowercase variants), and to skip the direct guest-egress probe when an explicit proxy is configured.
+- Retried Ubuntu apt install transactions inside the image build, so transient proxy disconnects can reuse partial package downloads instead of failing the full Apple `container` build.
 - Added `cxhere --dns-search <name>` for Apple `container` sessions, passing the flag through to `container run` and including it in the launch-config fingerprint.
 - Added shell regression coverage for Apple `container` DNS search passthrough and local-runtime rejection.
 

@@ -44,6 +44,11 @@ cx_build_image_container() {
   local -a build_args
   npm_cachebust="$1"
   cx_require_runtime container
+  if ! cx_container_build_network_ready; then
+    echo "Apple container guest networking cannot reach $(cx_container_build_network_probe_host):80." >&2
+    echo "Use \`CX_BUILD_RUNTIME=docker ./scripts/build-local.sh\` or repair the Apple container network and retry." >&2
+    return 1
+  fi
   for tag in "$IMAGE_NAME" "$PROJECT_NAME"; do
     cx_delete_image_tag_container "$tag"
   done
@@ -61,6 +66,14 @@ cx_build_image_container() {
   if [ -n "${CX_BUILD_PLATFORM:-}" ]; then
     build_args+=(--platform "$CX_BUILD_PLATFORM")
   fi
+  for proxy_var in \
+    HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY \
+    http_proxy https_proxy no_proxy all_proxy
+  do
+    if [ -n "${!proxy_var:-}" ]; then
+      build_args+=(--build-arg "$proxy_var=${!proxy_var}")
+    fi
+  done
   build_args+=("$ROOT_DIR")
   container "${build_args[@]}"
 }

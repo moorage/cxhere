@@ -4,12 +4,48 @@ FROM ubuntu:25.10
 ARG DEBIAN_FRONTEND=noninteractive
 ARG NODE_VERSION=25.8.1
 ARG NPM_CACHEBUST=1
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG ALL_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+ARG all_proxy
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+  apt_install_retry() { \
+    attempt=1; \
+    while [ "$attempt" -le 3 ]; do \
+      if apt-get install -y --no-install-recommends --fix-missing "$@"; then \
+        return 0; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then \
+        return 1; \
+      fi; \
+      attempt=$((attempt + 1)); \
+      apt-get update; \
+    done; \
+  }; \
+  proxy_url="${https_proxy:-${HTTPS_PROXY:-${http_proxy:-${HTTP_PROXY:-}}}}"; \
+  : > /etc/apt/apt.conf.d/99cxhere-network; \
+  if [ -n "$proxy_url" ]; then \
+    printf 'Acquire::http::Proxy "%s";\n' "$proxy_url" >> /etc/apt/apt.conf.d/99cxhere-network; \
+    printf 'Acquire::https::Proxy "%s";\n' "$proxy_url" >> /etc/apt/apt.conf.d/99cxhere-network; \
+  fi; \
+  printf '%s\n' 'Acquire::Retries "5";' >> /etc/apt/apt.conf.d/99cxhere-network; \
+  apt-get update && apt_install_retry \
   ca-certificates curl gnupg wget xz-utils \
+  && for apt_sources in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do \
+    [ -f "$apt_sources" ] || continue; \
+    sed -i \
+      -e 's|http://ports.ubuntu.com/ubuntu-ports/|https://ports.ubuntu.com/ubuntu-ports/|g' \
+      -e 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g' \
+      "$apt_sources"; \
+  done \
   && wget -qO /etc/apt/trusted.gpg.d/ngrok.asc \
   https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
   && echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" \
@@ -26,7 +62,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && if [ "$arch" = "amd64" ]; then \
     browser_pkg="google-chrome-stable"; \
   fi \
-  && apt-get install -y --no-install-recommends \
+  && apt_install_retry \
   ffmpeg \
   fonts-freefont-ttf fonts-ipafont-gothic fonts-liberation fonts-noto-color-emoji \
   fonts-tlwg-loma-otf fonts-unifont fonts-wqy-zenhei \
